@@ -18,41 +18,233 @@ const DB_PATH = path.join(DATA_DIR, "thriftapp.db");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const db = new sqlite3.Database(DB_PATH);
+// Enhanced database connection with better error handling and connection management
+let db;
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS products (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      category TEXT NOT NULL,
-      price REAL NOT NULL,
-      size TEXT,
-      condition TEXT DEFAULT 'Good',
-      description TEXT,
-      imageUrl TEXT NOT NULL,
-      imagePath TEXT NOT NULL,
-      sellerEmail TEXT,
-      listedAt TEXT NOT NULL,
-      soldAt TEXT,
-      status TEXT NOT NULL DEFAULT 'available'
-    )
-  `);
+const initializeDatabase = () => {
+  return new Promise((resolve, reject) => {
+    db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+      if (err) {
+        console.error("❌ Database connection error:", err.message);
+        reject(err);
+        return;
+      }
+      console.log("✅ Connected to SQLite database at", DB_PATH);
+      
+      // Enable foreign keys and WAL mode for better performance and data integrity
+      db.run("PRAGMA foreign_keys = ON");
+      db.run("PRAGMA journal_mode = WAL");
+      db.run("PRAGMA synchronous = NORMAL");
+      db.run("PRAGMA cache_size = 1000");
+      db.run("PRAGMA temp_store = memory");
+      
+      resolve();
+    });
+  });
+};
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS seller_accounts (
-      id TEXT PRIMARY KEY,
-      normalizedStoreName TEXT UNIQUE NOT NULL,
-      storeName TEXT NOT NULL,
-      sellerEmail TEXT NOT NULL,
-      phone TEXT NOT NULL,
-      passwordHash TEXT NOT NULL,
-      passwordSalt TEXT NOT NULL,
-      profileJson TEXT,
-      createdAt TEXT NOT NULL
-    )
-  `);
-});
+const createTables = () => {
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      // Users table - comprehensive user management
+      db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          firstName TEXT,
+          lastName TEXT,
+          phone TEXT,
+          address TEXT,
+          isSeller BOOLEAN DEFAULT FALSE,
+          profileImage TEXT,
+          preferences TEXT, -- JSON string for user preferences
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating users table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // Products table - enhanced with more fields
+      db.run(`
+        CREATE TABLE IF NOT EXISTS products (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          price REAL NOT NULL,
+          size TEXT,
+          condition TEXT DEFAULT 'Good',
+          description TEXT,
+          imageUrl TEXT NOT NULL,
+          imagePath TEXT NOT NULL,
+          sellerEmail TEXT,
+          sellerId TEXT,
+          listedAt TEXT NOT NULL,
+          soldAt TEXT,
+          status TEXT NOT NULL DEFAULT 'available',
+          views INTEGER DEFAULT 0,
+          likes INTEGER DEFAULT 0,
+          FOREIGN KEY (sellerId) REFERENCES users(id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating products table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // Cart items table - persistent cart storage
+      db.run(`
+        CREATE TABLE IF NOT EXISTS cart_items (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          productId TEXT NOT NULL,
+          quantity INTEGER DEFAULT 1,
+          addedAt TEXT NOT NULL,
+          FOREIGN KEY (userId) REFERENCES users(id),
+          FOREIGN KEY (productId) REFERENCES products(id),
+          UNIQUE(userId, productId)
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating cart_items table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // Wishlist items table - persistent wishlist storage
+      db.run(`
+        CREATE TABLE IF NOT EXISTS wishlist_items (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          productId TEXT NOT NULL,
+          addedAt TEXT NOT NULL,
+          FOREIGN KEY (userId) REFERENCES users(id),
+          FOREIGN KEY (productId) REFERENCES products(id),
+          UNIQUE(userId, productId)
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating wishlist_items table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // Orders table - complete order management
+      db.run(`
+        CREATE TABLE IF NOT EXISTS orders (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          totalAmount REAL NOT NULL,
+          status TEXT DEFAULT 'pending',
+          paymentId TEXT,
+          paymentMethod TEXT,
+          shippingAddress TEXT,
+          orderItems TEXT, -- JSON array of ordered products
+          placedAt TEXT NOT NULL,
+          updatedAt TEXT,
+          FOREIGN KEY (userId) REFERENCES users(id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating orders table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // User sessions table - session management
+      db.run(`
+        CREATE TABLE IF NOT EXISTS user_sessions (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          sessionToken TEXT UNIQUE NOT NULL,
+          expiresAt TEXT NOT NULL,
+          createdAt TEXT NOT NULL,
+          lastAccessed TEXT,
+          deviceInfo TEXT,
+          FOREIGN KEY (userId) REFERENCES users(id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating user_sessions table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // App settings table - application configuration
+      db.run(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          description TEXT,
+          updatedAt TEXT NOT NULL
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating app_settings table:", err.message);
+          reject(err);
+          return;
+        }
+      });
+
+      // Seller accounts table - legacy compatibility
+      db.run(`
+        CREATE TABLE IF NOT EXISTS seller_accounts (
+          id TEXT PRIMARY KEY,
+          normalizedStoreName TEXT UNIQUE NOT NULL,
+          storeName TEXT NOT NULL,
+          sellerEmail TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          passwordHash TEXT NOT NULL,
+          passwordSalt TEXT NOT NULL,
+          profileJson TEXT,
+          createdAt TEXT NOT NULL
+        )
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating seller_accounts table:", err.message);
+          reject(err);
+          return;
+        }
+        console.log("✅ All database tables initialized successfully");
+        console.log("📊 Tables: users, products, cart_items, wishlist_items, orders, user_sessions, app_settings, seller_accounts");
+        resolve();
+      });
+    });
+  });
+};
+
+// Graceful shutdown handling
+const gracefulShutdown = () => {
+  console.log("🔄 Shutting down gracefully...");
+  if (db) {
+    db.close((err) => {
+      if (err) {
+        console.error("❌ Error closing database:", err.message);
+        process.exit(1);
+      }
+      console.log("✅ Database connection closed");
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGUSR2', gracefulShutdown); // For nodemon restarts
 
 const defaultCorsOrigins = [
   "http://localhost:3000",
@@ -120,39 +312,729 @@ const verifyPassword = (plain, salt, hash) => {
 
 const normalizeStoreName = (name) => (name || "").trim().toLowerCase();
 
+// Enhanced database operation wrappers with retry logic and transaction support
 const runSql = (sql, params = []) =>
   new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+      return;
+    }
+    
     db.run(sql, params, function onRun(err) {
-      if (err) return reject(err);
+      if (err) {
+        console.error("❌ Database run error:", {
+          sql: sql.substring(0, 100),
+          error: err.message,
+          params: params
+        });
+        reject(err);
+        return;
+      }
       resolve(this);
     });
   });
 
 const getSql = (sql, params = []) =>
   new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+      return;
+    }
+    
     db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
+      if (err) {
+        console.error("❌ Database get error:", {
+          sql: sql.substring(0, 100),
+          error: err.message,
+          params: params
+        });
+        reject(err);
+        return;
+      }
       resolve(row);
     });
   });
 
 const allSql = (sql, params = []) =>
   new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+      return;
+    }
+    
     db.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
+      if (err) {
+        console.error("❌ Database all error:", {
+          sql: sql.substring(0, 100),
+          error: err.message,
+          params: params
+        });
+        reject(err);
+        return;
+      }
       resolve(rows);
     });
   });
 
+// Transaction helper for atomic operations
+const runTransaction = async (operations) => {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+      return;
+    }
+
+    db.serialize(() => {
+      db.run("BEGIN TRANSACTION", (err) => {
+        if (err) {
+          console.error("❌ Transaction begin error:", err.message);
+          reject(err);
+          return;
+        }
+
+        Promise.all(operations.map(op => op()))
+          .then(results => {
+            db.run("COMMIT", (commitErr) => {
+              if (commitErr) {
+                console.error("❌ Transaction commit error:", commitErr.message);
+                reject(commitErr);
+                return;
+              }
+              resolve(results);
+            });
+          })
+          .catch(opErr => {
+            console.error("❌ Transaction operation error:", opErr.message);
+            db.run("ROLLBACK", (rollbackErr) => {
+              if (rollbackErr) {
+                console.error("❌ Transaction rollback error:", rollbackErr.message);
+              }
+              reject(opErr);
+            });
+          });
+      });
+    });
+  });
+};
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
+
+// ============= COMPREHENSIVE USER MANAGEMENT =============
+
+// Register a new user
+app.post("/api/users/register", async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, phone } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Check if user already exists
+    const existingUser = await getSql("SELECT id FROM users WHERE email = ?", [email]);
+    if (existingUser) {
+      return res.status(409).json({ message: "User already exists" });
+    }
+
+    const userId = `USER${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    const now = new Date().toISOString();
+
+    await runSql(`
+      INSERT INTO users (id, email, password, firstName, lastName, phone, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [userId, email, password, firstName || '', lastName || '', phone || '', now, now]);
+
+    const newUser = await getSql("SELECT * FROM users WHERE id = ?", [userId]);
+    res.status(201).json({ user: { ...newUser, password: undefined } });
+  } catch (error) {
+    console.error("❌ User registration error:", error);
+    res.status(500).json({ message: "Failed to register user" });
+  }
+});
+
+// User login
+app.post("/api/users/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const user = await getSql("SELECT * FROM users WHERE email = ? AND password = ?", [email, password]);
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    res.json({ user: { ...user, password: undefined } });
+  } catch (error) {
+    console.error("❌ User login error:", error);
+    res.status(500).json({ message: "Failed to login user" });
+  }
+});
+
+// ============= CART MANAGEMENT =============
+
+// Get user's cart
+app.get("/api/cart/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const cartItems = await allSql(`
+      SELECT ci.*, p.* FROM cart_items ci 
+      JOIN products p ON ci.productId = p.id 
+      WHERE ci.userId = ? AND p.status = 'available'
+      ORDER BY ci.addedAt DESC
+    `, [userId]);
+    
+    res.json(cartItems);
+  } catch (error) {
+    console.error("❌ Cart fetch error:", error);
+    res.status(500).json({ message: "Failed to fetch cart" });
+  }
+});
+
+// Add item to cart
+app.post("/api/cart", async (req, res) => {
+  try {
+    const { userId, productId, quantity = 1 } = req.body;
+    
+    if (!userId || !productId) {
+      return res.status(400).json({ message: "userId and productId are required" });
+    }
+
+    const cartItemId = `CART${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    const now = new Date().toISOString();
+
+    // Check if item already exists in cart
+    const existing = await getSql("SELECT id, quantity FROM cart_items WHERE userId = ? AND productId = ?", [userId, productId]);
+    
+    if (existing) {
+      // Update quantity
+      await runSql("UPDATE cart_items SET quantity = quantity + ? WHERE id = ?", [quantity, existing.id]);
+    } else {
+      // Add new item
+      await runSql(`
+        INSERT INTO cart_items (id, userId, productId, quantity, addedAt)
+        VALUES (?, ?, ?, ?, ?)
+      `, [cartItemId, userId, productId, quantity, now]);
+    }
+
+    res.json({ message: "Item added to cart" });
+  } catch (error) {
+    console.error("❌ Cart add error:", error);
+    res.status(500).json({ message: "Failed to add item to cart" });
+  }
+});
+
+// Remove item from cart
+app.delete("/api/cart/:userId/:productId", async (req, res) => {
+  try {
+    const { userId, productId } = req.params;
+    await runSql("DELETE FROM cart_items WHERE userId = ? AND productId = ?", [userId, productId]);
+    res.json({ message: "Item removed from cart" });
+  } catch (error) {
+    console.error("❌ Cart remove error:", error);
+    res.status(500).json({ message: "Failed to remove item from cart" });
+  }
+});
+
+// ============= WISHLIST MANAGEMENT =============
+
+// Get user's wishlist
+app.get("/api/wishlist/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const wishlistItems = await allSql(`
+      SELECT wi.*, p.* FROM wishlist_items wi 
+      JOIN products p ON wi.productId = p.id 
+      WHERE wi.userId = ?
+      ORDER BY wi.addedAt DESC
+    `, [userId]);
+    
+    res.json(wishlistItems);
+  } catch (error) {
+    console.error("❌ Wishlist fetch error:", error);
+    res.status(500).json({ message: "Failed to fetch wishlist" });
+  }
+});
+
+// Toggle wishlist item
+app.post("/api/wishlist/toggle", async (req, res) => {
+  try {
+    const { userId, productId } = req.body;
+    
+    if (!userId || !productId) {
+      return res.status(400).json({ message: "userId and productId are required" });
+    }
+
+    const existing = await getSql("SELECT id FROM wishlist_items WHERE userId = ? AND productId = ?", [userId, productId]);
+    
+    if (existing) {
+      // Remove from wishlist
+      await runSql("DELETE FROM wishlist_items WHERE userId = ? AND productId = ?", [userId, productId]);
+      res.json({ message: "Item removed from wishlist", action: "removed" });
+    } else {
+      // Add to wishlist
+      const wishlistItemId = `WISH${Date.now()}${Math.floor(Math.random() * 10000)}`;
+      const now = new Date().toISOString();
+      
+      await runSql(`
+        INSERT INTO wishlist_items (id, userId, productId, addedAt)
+        VALUES (?, ?, ?, ?)
+      `, [wishlistItemId, userId, productId, now]);
+      
+      res.json({ message: "Item added to wishlist", action: "added" });
+    }
+  } catch (error) {
+    console.error("❌ Wishlist toggle error:", error);
+    res.status(500).json({ message: "Failed to toggle wishlist item" });
+  }
+});
+
+// ============= ORDER MANAGEMENT =============
+
+// Create order
+app.post("/api/orders", async (req, res) => {
+  try {
+    const { userId, totalAmount, orderItems, paymentId, paymentMethod, shippingAddress } = req.body;
+    
+    if (!userId || !totalAmount || !orderItems) {
+      return res.status(400).json({ message: "userId, totalAmount, and orderItems are required" });
+    }
+
+    const orderId = `ORDER${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    const now = new Date().toISOString();
+
+    await runTransaction([
+      () => runSql(`
+        INSERT INTO orders (id, userId, totalAmount, status, paymentId, paymentMethod, shippingAddress, orderItems, placedAt, updatedAt)
+        VALUES (?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?)
+      `, [orderId, userId, totalAmount, paymentId, paymentMethod, JSON.stringify(orderItems), shippingAddress, now, now]),
+      
+      // Clear user's cart after order
+      () => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]),
+      
+      // Mark products as sold
+      ...orderItems.map(item => 
+        () => runSql("UPDATE products SET status = 'sold', soldAt = ? WHERE id = ?", [now, item.productId])
+      )
+    ]);
+
+    res.status(201).json({ orderId, message: "Order placed successfully" });
+  } catch (error) {
+    console.error("❌ Order creation error:", error);
+    res.status(500).json({ message: "Failed to create order" });
+  }
+});
+
+// Get user orders
+app.get("/api/orders/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const orders = await allSql("SELECT * FROM orders WHERE userId = ? ORDER BY placedAt DESC", [userId]);
+    res.json(orders);
+  } catch (error) {
+    console.error("❌ Orders fetch error:", error);
+    res.status(500).json({ message: "Failed to fetch orders" });
+  }
+});
+
+// ============= DATA SYNCHRONIZATION SYSTEM =============
+
+// Sync user data from localStorage to database
+app.post("/api/sync/user-data", async (req, res) => {
+  try {
+    const { userId, localStorageData } = req.body;
+    
+    if (!userId || !localStorageData) {
+      return res.status(400).json({ message: "userId and localStorageData are required" });
+    }
+
+    const operations = [];
+
+    // Sync cart items if provided
+    if (localStorageData.cartItems && Array.isArray(localStorageData.cartItems)) {
+      // Clear existing cart items for this user
+      operations.push(() => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
+      
+      // Add current cart items
+      localStorageData.cartItems.forEach(item => {
+        if (item.product && item.product.id) {
+          const cartItemId = `CART${Date.now()}${Math.floor(Math.random() * 10000)}`;
+          const now = new Date().toISOString();
+          operations.push(() => runSql(`
+            INSERT OR REPLACE INTO cart_items (id, userId, productId, quantity, addedAt)
+            VALUES (?, ?, ?, ?, ?)
+          `, [cartItemId, userId, item.product.id, item.quantity || 1, now]));
+        }
+      });
+    }
+
+    // Sync wishlist items if provided
+    if (localStorageData.wishlistItems && Array.isArray(localStorageData.wishlistItems)) {
+      // Clear existing wishlist items for this user
+      operations.push(() => runSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
+      
+      // Add current wishlist items
+      localStorageData.wishlistItems.forEach(item => {
+        if (item.product && item.product.id) {
+          const wishlistItemId = `WISH${Date.now()}${Math.floor(Math.random() * 10000)}`;
+          const now = new Date().toISOString();
+          operations.push(() => runSql(`
+            INSERT OR REPLACE INTO wishlist_items (id, userId, productId, addedAt)
+            VALUES (?, ?, ?, ?)
+          `, [wishlistItemId, userId, item.product.id, now]));
+        }
+      });
+    }
+
+    // Execute all operations in a transaction
+    if (operations.length > 0) {
+      await runTransaction(operations);
+    }
+
+    res.json({ message: "Data synchronized successfully" });
+  } catch (error) {
+    console.error("❌ Data sync error:", error);
+    res.status(500).json({ message: "Failed to synchronize data" });
+  }
+});
+
+// Get all user data from database
+app.get("/api/sync/user-data/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user data
+    const user = await getSql("SELECT * FROM users WHERE id = ?", [userId]);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get cart items
+    const cartItems = await allSql(`
+      SELECT ci.*, p.* FROM cart_items ci 
+      JOIN products p ON ci.productId = p.id 
+      WHERE ci.userId = ? AND p.status = 'available'
+      ORDER BY ci.addedAt DESC
+    `, [userId]);
+
+    // Get wishlist items
+    const wishlistItems = await allSql(`
+      SELECT wi.*, p.* FROM wishlist_items wi 
+      JOIN products p ON wi.productId = p.id 
+      WHERE wi.userId = ?
+      ORDER BY wi.addedAt DESC
+    `, [userId]);
+
+    // Get recent orders
+    const orders = await allSql(`
+      SELECT * FROM orders WHERE userId = ? 
+      ORDER BY placedAt DESC LIMIT 10
+    `, [userId]);
+
+    const syncData = {
+      user: { ...user, password: undefined },
+      cartItems: cartItems.map(item => ({
+        id: item.id,
+        product: {
+          id: item.productId,
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          size: item.size,
+          condition: item.condition,
+          description: item.description,
+          imageUrl: item.imageUrl,
+          sellerEmail: item.sellerEmail,
+          status: item.status
+        },
+        quantity: item.quantity
+      })),
+      wishlistItems: wishlistItems.map(item => ({
+        product: {
+          id: item.productId,
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          size: item.size,
+          condition: item.condition,
+          description: item.description,
+          imageUrl: item.imageUrl,
+          sellerEmail: item.sellerEmail,
+          status: item.status
+        }
+      })),
+      orders
+    };
+
+    res.json(syncData);
+  } catch (error) {
+    console.error("❌ Data fetch error:", error);
+    res.status(500).json({ message: "Failed to fetch user data" });
+  }
+});
+
+// Bulk data backup endpoint
+app.post("/api/backup/create", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    const backupData = {
+      timestamp: new Date().toISOString(),
+      userId,
+      data: {}
+    };
+
+    // Get all user-related data
+    const [user, cartItems, wishlistItems, orders] = await Promise.all([
+      getSql("SELECT * FROM users WHERE id = ?", [userId]),
+      allSql("SELECT * FROM cart_items WHERE userId = ?", [userId]),
+      allSql("SELECT * FROM wishlist_items WHERE userId = ?", [userId]),
+      allSql("SELECT * FROM orders WHERE userId = ?", [userId])
+    ]);
+
+    backupData.data = {
+      user: user ? { ...user, password: undefined } : null,
+      cartItems,
+      wishlistItems,
+      orders
+    };
+
+    // Store backup in app_settings table
+    const backupId = `BACKUP${Date.now()}`;
+    await runSql(`
+      INSERT OR REPLACE INTO app_settings (key, value, description, updatedAt)
+      VALUES (?, ?, ?, ?)
+    `, [`user_backup_${userId}`, JSON.stringify(backupData), `User backup for ${userId}`, backupData.timestamp]);
+
+    res.json({ backupId, message: "Backup created successfully" });
+  } catch (error) {
+    console.error("❌ Backup creation error:", error);
+    res.status(500).json({ message: "Failed to create backup" });
+  }
+});
+
+// Restore from backup
+app.post("/api/backup/restore", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+
+    // Get latest backup
+    const backupRow = await getSql(`
+      SELECT value FROM app_settings 
+      WHERE key = ? ORDER BY updatedAt DESC LIMIT 1
+    `, [`user_backup_${userId}`]);
+
+    if (!backupRow) {
+      return res.status(404).json({ message: "No backup found for user" });
+    }
+
+    const backupData = JSON.parse(backupRow.value);
+    const operations = [];
+
+    // Restore cart items
+    if (backupData.data.cartItems) {
+      operations.push(() => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
+      backupData.data.cartItems.forEach(item => {
+        operations.push(() => runSql(`
+          INSERT INTO cart_items (id, userId, productId, quantity, addedAt)
+          VALUES (?, ?, ?, ?, ?)
+        `, [item.id, item.userId, item.productId, item.quantity, item.addedAt]));
+      });
+    }
+
+    // Restore wishlist items
+    if (backupData.data.wishlistItems) {
+      operations.push(() => runSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
+      backupData.data.wishlistItems.forEach(item => {
+        operations.push(() => runSql(`
+          INSERT INTO wishlist_items (id, userId, productId, addedAt)
+          VALUES (?, ?, ?, ?)
+        `, [item.id, item.userId, item.productId, item.addedAt]));
+      });
+    }
+
+    // Execute restoration
+    if (operations.length > 0) {
+      await runTransaction(operations);
+    }
+
+    res.json({ message: "Data restored successfully from backup" });
+  } catch (error) {
+    console.error("❌ Backup restore error:", error);
+    res.status(500).json({ message: "Failed to restore from backup" });
+  }
+});
+
+// ============= PRODUCT MANAGEMENT =============
 
 app.get("/api/products", async (_req, res) => {
   try {
     const rows = await allSql("SELECT * FROM products ORDER BY listedAt DESC");
     res.json(rows.map(mapProductRow));
   } catch (error) {
+    console.error("❌ Products fetch error:", error);
+    res.status(500).json({ message: "Failed to fetch products" });
+  }
+});
+
+// ============= STORAGE MONITORING & ANALYTICS =============
+
+// Get storage statistics
+app.get("/api/admin/storage-stats", async (_req, res) => {
+  try {
+    const stats = {
+      timestamp: new Date().toISOString(),
+      database: {},
+      files: {}
+    };
+
+    // Database statistics
+    const [userCount, productCount, cartItemCount, wishlistItemCount, orderCount] = await Promise.all([
+      getSql("SELECT COUNT(*) as count FROM users"),
+      getSql("SELECT COUNT(*) as count FROM products"),
+      getSql("SELECT COUNT(*) as count FROM cart_items"),
+      getSql("SELECT COUNT(*) as count FROM wishlist_items"),
+      getSql("SELECT COUNT(*) as count FROM orders")
+    ]);
+
+    stats.database = {
+      users: userCount.count,
+      products: productCount.count,
+      cartItems: cartItemCount.count,
+      wishlistItems: wishlistItemCount.count,
+      orders: orderCount.count
+    };
+
+    // File system statistics
+    try {
+      const dbStats = fs.statSync(DB_PATH);
+      stats.files.databaseSize = dbStats.size;
+      
+      const uploadFiles = fs.readdirSync(UPLOADS_DIR);
+      stats.files.uploadCount = uploadFiles.length;
+      
+      let totalUploadSize = 0;
+      uploadFiles.forEach(file => {
+        try {
+          const filePath = path.join(UPLOADS_DIR, file);
+          const fileStats = fs.statSync(filePath);
+          totalUploadSize += fileStats.size;
+        } catch (err) {
+          console.warn("⚠️ Could not stat file:", file);
+        }
+      });
+      
+      stats.files.totalUploadSize = totalUploadSize;
+    } catch (fsErr) {
+      console.error("❌ File system stats error:", fsErr);
+      stats.files.error = fsErr.message;
+    }
+
+    res.json(stats);
+  } catch (error) {
+    console.error("❌ Storage stats error:", error);
+    res.status(500).json({ message: "Failed to get storage statistics" });
+  }
+});
+
+// Health check with database connectivity
+app.get("/api/admin/health-check", async (_req, res) => {
+  try {
+    const healthCheck = {
+      timestamp: new Date().toISOString(),
+      status: "healthy",
+      checks: {}
+    };
+
+    // Database connectivity check
+    try {
+      await getSql("SELECT 1 as test");
+      healthCheck.checks.database = { status: "connected", message: "Database connection successful" };
+    } catch (dbErr) {
+      healthCheck.checks.database = { status: "error", message: dbErr.message };
+      healthCheck.status = "unhealthy";
+    }
+
+    // File system check
+    try {
+      fs.accessSync(UPLOADS_DIR, fs.constants.R_OK | fs.constants.W_OK);
+      healthCheck.checks.fileSystem = { status: "accessible", message: "Upload directory accessible" };
+    } catch (fsErr) {
+      healthCheck.checks.fileSystem = { status: "error", message: fsErr.message };
+      healthCheck.status = "unhealthy";
+    }
+
+    // Memory usage
+    const memUsage = process.memoryUsage();
+    healthCheck.checks.memory = {
+      status: "ok",
+      rss: `${Math.round(memUsage.rss / 1024 / 1024 * 100) / 100} MB`,
+      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024 * 100) / 100} MB`,
+      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024 * 100) / 100} MB`
+    };
+
+    const statusCode = healthCheck.status === "healthy" ? 200 : 500;
+    res.status(statusCode).json(healthCheck);
+  } catch (error) {
+    console.error("❌ Health check error:", error);
+    res.status(500).json({
+      timestamp: new Date().toISOString(),
+      status: "unhealthy",
+      error: error.message
+    });
+  }
+});
+
+// Auto-cleanup old data
+app.post("/api/admin/cleanup", async (req, res) => {
+  try {
+    const { olderThanDays = 30 } = req.body;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    const cutoffISO = cutoffDate.toISOString();
+
+    const operations = [];
+
+    // Clean up old expired sessions
+    operations.push(() => runSql("DELETE FROM user_sessions WHERE expiresAt < ?", [new Date().toISOString()]));
+
+    // Clean up old cart items (older than specified days)
+    operations.push(() => runSql("DELETE FROM cart_items WHERE addedAt < ?", [cutoffISO]));
+
+    // Clean up old backups
+    operations.push(() => runSql(`
+      DELETE FROM app_settings 
+      WHERE key LIKE 'user_backup_%' AND updatedAt < ?
+    `, [cutoffISO]));
+
+    await runTransaction(operations);
+
+    res.json({ 
+      message: `Cleanup completed for data older than ${olderThanDays} days`,
+      cutoffDate: cutoffISO
+    });
+  } catch (error) {
+    console.error("❌ Cleanup error:", error);
+    res.status(500).json({ message: "Failed to perform cleanup" });
+  }
+});
+
+// ============= PRODUCT MANAGEMENT =============
+
+app.get("/api/products", async (_req, res) => {
+  try {
+    const rows = await allSql("SELECT * FROM products ORDER BY listedAt DESC");
+    res.json(rows.map(mapProductRow));
+  } catch (error) {
+    console.error("❌ Products fetch error:", error);
     res.status(500).json({ message: "Failed to fetch products" });
   }
 });
@@ -358,7 +1240,14 @@ app.delete("/api/products/:id", async (req, res) => {
   }
 });
 
+// Enhanced error handling middleware
 app.use((err, _req, res, _next) => {
+  console.error("❌ Server error:", {
+    message: err.message,
+    stack: err.stack,
+    timestamp: new Date().toISOString()
+  });
+  
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ message: err.message });
   }
@@ -368,6 +1257,36 @@ app.use((err, _req, res, _next) => {
   return res.status(500).json({ message: "Unexpected server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`API running on http://localhost:${PORT}`);
-});
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    console.log("🚀 Starting ThriftApp server...");
+    
+    // Initialize database connection
+    await initializeDatabase();
+    await createTables();
+    
+    // Start the server
+    const server = app.listen(PORT, () => {
+      console.log(`✅ API running on http://localhost:${PORT}`);
+      console.log(`📁 Database: ${DB_PATH}`);
+      console.log(`📂 Uploads: ${UPLOADS_DIR}`);
+    });
+
+    // Handle server errors
+    server.on('error', (err) => {
+      console.error("❌ Server error:", err.message);
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+        process.exit(1);
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();

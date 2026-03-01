@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-03-01T13:19:48.506Z",
+  "files": [
+    {
+      "filename": ".gitkeep",
+      "size": 1,
+      "modified": "2026-02-12T19:09:27.215Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\.gitkeep"
+    },
+    {
+      "filename": "1770931116472-928464744.png",
+      "size": 157911,
+      "modified": "2026-02-12T21:18:36.498Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770931116472-928464744.png"
+    },
+    {
+      "filename": "1770931325842-371905414.png",
+      "size": 289479,
+      "modified": "2026-02-12T21:22:05.858Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770931325842-371905414.png"
+    },
+    {
+      "filename": "1770962202101-757816413.png",
+      "size": 163582,
+      "modified": "2026-02-13T05:56:42.112Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770962202101-757816413.png"
+    },
+    {
+      "filename": "1770965260993-177623361.png",
+      "size": 271944,
+      "modified": "2026-02-13T06:47:40.999Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770965260993-177623361.png"
+    },
+    {
+      "filename": "1770971307486-744694248.png",
+      "size": 168247,
+      "modified": "2026-02-13T08:28:27.491Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770971307486-744694248.png"
+    },
+    {
+      "filename": "1770976041858-434141439.png",
+      "size": 157911,
+      "modified": "2026-02-13T09:47:21.908Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770976041858-434141439.png"
+    },
+    {
+      "filename": "1770977210091-868622391.png",
+      "size": 157257,
+      "modified": "2026-02-13T10:06:50.107Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770977210091-868622391.png"
+    },
+    {
+      "filename": "1770979493246-569868150.jpg",
+      "size": 32119,
+      "modified": "2026-02-13T10:44:53.263Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770979493246-569868150.jpg"
+    },
+    {
+      "filename": "1770991924948-780908560.png",
+      "size": 160383,
+      "modified": "2026-02-13T14:12:04.962Z",
+      "path": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\uploads\\1770991924948-780908560.png"
+    }
+  ]
+}

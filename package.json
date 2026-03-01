@@ -14,6 +14,7 @@
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.559.0",
     "multer": "^2.0.2",
+    "pg": "^8.13.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-redux": "^9.2.0",
@@ -22,12 +23,23 @@
     "sqlite3": "^5.1.7",
     "web-vitals": "^2.1.4"
   },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "concurrently": "^9.1.0"
+  },
   "scripts": {
-    "server": "node server/server.js",
+    "server": "nodemon server/server.js",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "dev": "concurrently \"npm run server\" \"npm start\"",
+    "deploy:export": "node server/scripts/export-data.js",
+    "deploy:import": "node server/scripts/import-data.js",
+    "deploy:supabase": "node server/scripts/import-to-supabase.js",
+    "deploy:setup": "node server/scripts/deploy-setup.js",
+    "start:production": "NODE_ENV=production node server/server.js",
+    "vercel-build": "npm run build"
   },
   "eslintConfig": {
     "extends": [
