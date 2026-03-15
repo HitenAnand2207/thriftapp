@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const createDeploymentFiles = () => {
-  console.log("🚀 Creating deployment configuration files...");
+  console.log(" Creating deployment configuration files...");
   
   // Create .env.production template
   const envProduction = `# Production Environment Variables
@@ -111,17 +111,17 @@ npm run server
 
   fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
-  console.log("✅ Created deployment files:");
-  console.log("   📄 .env.production.template");
-  console.log("   📄 vercel.json");  
-  console.log("   📄 Procfile (Heroku)");
-  console.log("   📄 railway-deploy.sh");
-  console.log("   📦 Updated package.json scripts");
+  console.log(" Created deployment files:");
+  console.log("    .env.production.template");
+  console.log("    vercel.json");  
+  console.log("    Procfile (Heroku)");
+  console.log("    railway-deploy.sh");
+  console.log("    Updated package.json scripts");
 };
 
 // Create cloud database setup instructions
 const createSetupInstructions = () => {
-  const instructions = `# 🚀 Deployment Setup Guide
+  const instructions = `#  Deployment Setup Guide
 
 ## Step 1: Export Your Local Data
 \`\`\`bash
@@ -173,11 +173,11 @@ Your app will have the same products, users, and data as your local version!
 - \`NODE_ENV=production\`
 - \`CORS_ORIGIN\` - Your deployed frontend URL
 
-## 🎯 Result
-✅ All your local products will appear on the deployed site
-✅ Users can create accounts that persist 
-✅ Shopping carts work across devices
-✅ All data is safely stored in the cloud
+##  Result
+All your local products will appear on the deployed site
+ Users can create accounts that persist 
+ Shopping carts work across devices
+ All data is safely stored in the cloud
 `;
 
   fs.writeFileSync(path.join(__dirname, "../../DEPLOYMENT.md"), instructions);

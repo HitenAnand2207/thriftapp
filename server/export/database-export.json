@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-01T13:19:48.402Z",
+  "timestamp": "2026-03-15T18:06:27.514Z",
   "version": "1.0",
   "database": {
     "products": [
@@ -187,7 +187,9 @@
         "profileImage": null,
         "preferences": null,
         "createdAt": "2026-03-01T13:11:42.641Z",
-        "updatedAt": "2026-03-01T13:11:42.641Z"
+        "updatedAt": "2026-03-01T13:11:42.641Z",
+        "isAdmin": 0,
+        "name": "Test User"
       }
     ],
     "cart_items": [
@@ -202,6 +204,9 @@
     "wishlist_items": [],
     "orders": [],
     "user_sessions": [],
-    "app_settings": []
+    "app_settings": [],
+    "support_tickets": [],
+    "sqlite_sequence": [],
+    "chat_messages": []
   }
 }

@@ -22,6 +22,8 @@ const ProductListing = lazy(() => import("./components/seller/ProductListing"));
 const SellerDashboard = lazy(() => import("./components/seller/SellerDashboard"));
 const ProfilePage = lazy(() => import("./components/profile/ProfilePage"));
 const SettingsPage = lazy(() => import("./components/settings/SettingsPage"));
+const SupportDashboard = lazy(() => import("./components/admin/SupportDashboard"));
+const GuardTestPanel = lazy(() => import("./components/admin/GuardTestPanel"));
 
 const defaultMeta = {
   title: "ThriftIt | Sustainable Thrift Marketplace",
@@ -127,6 +129,10 @@ const App = () => {
             <Route path="/coupons" element={<CouponsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin/support" element={<SupportDashboard />} />
+            <Route path="/admin/guard-test" element={<GuardTestPanel />} />
           </Route>
 
           {/* Seller flow (separate from buyer browsing layout) */}
