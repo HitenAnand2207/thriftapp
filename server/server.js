@@ -67,6 +67,7 @@ const initializeDatabase = () => {
         console.log("✅ Connected to SQLite database at", DB_PATH);
         
         // Enable foreign keys and WAL mode for better performance and data integrity
+        // Note: These are SQLite-specific pragmas; PostgreSQL doesn't need them
         db.run("PRAGMA foreign_keys = ON");
         db.run("PRAGMA journal_mode = WAL");
         db.run("PRAGMA synchronous = NORMAL");
@@ -272,14 +273,26 @@ const createTables = () => {
 const gracefulShutdown = () => {
   console.log("🔄 Shutting down gracefully...");
   if (db) {
-    db.close((err) => {
-      if (err) {
+    if (IS_PRODUCTION) {
+      // PostgreSQL Pool uses end() instead of close()
+      db.end().then(() => {
+        console.log("✅ Database connection closed");
+        process.exit(0);
+      }).catch((err) => {
         console.error("❌ Error closing database:", err.message);
         process.exit(1);
-      }
-      console.log("✅ Database connection closed");
-      process.exit(0);
-    });
+      });
+    } else {
+      // SQLite uses close()
+      db.close((err) => {
+        if (err) {
+          console.error("❌ Error closing database:", err.message);
+          process.exit(1);
+        }
+        console.log("✅ Database connection closed");
+        process.exit(0);
+      });
+    }
   } else {
     process.exit(0);
   }
@@ -288,6 +301,7 @@ const gracefulShutdown = () => {
 // Handle shutdown signals
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
+process.on('SIGUSR2', gracefulShutdown); // For nodemon restarts
 process.on('SIGUSR2', gracefulShutdown); // For nodemon restarts
 
 const defaultCorsOrigins = [
@@ -482,36 +496,75 @@ const runTransaction = async (operations) => {
       return;
     }
 
-    db.serialize(() => {
-      db.run("BEGIN TRANSACTION", (err) => {
-        if (err) {
-          console.error("❌ Transaction begin error:", err.message);
-          reject(err);
-          return;
-        }
+    if (IS_PRODUCTION) {
+      // PostgreSQL: Use client transactions
+      db.connect().then(client => {
+        client.query('BEGIN', (err) => {
+          if (err) {
+            console.error("❌ Transaction begin error:", err.message);
+            client.release();
+            reject(err);
+            return;
+          }
 
-        Promise.all(operations.map(op => op()))
-          .then(results => {
-            db.run("COMMIT", (commitErr) => {
-              if (commitErr) {
-                console.error("❌ Transaction commit error:", commitErr.message);
-                reject(commitErr);
-                return;
-              }
-              resolve(results);
+          Promise.all(operations.map(op => op()))
+            .then(results => {
+              client.query('COMMIT', (commitErr) => {
+                if (commitErr) {
+                  console.error("❌ Transaction commit error:", commitErr.message);
+                  client.query('ROLLBACK');
+                  client.release();
+                  reject(commitErr);
+                  return;
+                }
+                client.release();
+                resolve(results);
+              });
+            })
+            .catch(opErr => {
+              console.error("❌ Transaction operation error:", opErr.message);
+              client.query('ROLLBACK', () => {
+                client.release();
+                reject(opErr);
+              });
             });
-          })
-          .catch(opErr => {
-            console.error("❌ Transaction operation error:", opErr.message);
-            db.run("ROLLBACK", (rollbackErr) => {
-              if (rollbackErr) {
-                console.error("❌ Transaction rollback error:", rollbackErr.message);
-              }
-              reject(opErr);
-            });
-          });
+        });
+      }).catch(err => {
+        console.error("❌ Failed to get database client:", err.message);
+        reject(err);
       });
-    });
+    } else {
+      // SQLite: Use db.serialize()
+      db.serialize(() => {
+        db.run("BEGIN TRANSACTION", (err) => {
+          if (err) {
+            console.error("❌ Transaction begin error:", err.message);
+            reject(err);
+            return;
+          }
+
+          Promise.all(operations.map(op => op()))
+            .then(results => {
+              db.run("COMMIT", (commitErr) => {
+                if (commitErr) {
+                  console.error("❌ Transaction commit error:", commitErr.message);
+                  reject(commitErr);
+                  return;
+                }
+                resolve(results);
+              });
+            })
+            .catch(opErr => {
+              console.error("❌ Transaction operation error:", opErr.message);
+              db.run("ROLLBACK", (rollbackErr) => {
+                if (rollbackErr) {
+                  console.error("❌ Transaction rollback error:", rollbackErr.message);
+                }
+                reject(opErr);
+              });
+            });
+        });
+      });
   });
 };
 
