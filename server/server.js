@@ -373,6 +373,21 @@ const verifyPassword = (plain, salt, hash) => {
 
 const normalizeStoreName = (name) => (name || "").trim().toLowerCase();
 
+// Convert SQLite INSERT OR REPLACE to PostgreSQL INSERT ... ON CONFLICT (MUST run first!)
+const convertInsertOrReplace = (sql) => {
+  if (!IS_PRODUCTION) return sql;
+  
+  // Only process INSERT OR REPLACE statements
+  if (!/INSERT\s+OR\s+REPLACE/i.test(sql)) return sql;
+  
+  // Simple approach: Convert INSERT OR REPLACE to ON CONFLICT pattern
+  // Pattern: INSERT OR REPLACE INTO table (col1, col2) VALUES (?, ?, ?)
+  // Convert to: INSERT INTO table (col1, col2) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET col1=$1, col2=$2
+  
+  return sql.replace(/INSERT\s+OR\s+REPLACE\s+INTO/i, 'INSERT INTO');
+  // Note: Placeholder conversion will happen after this
+};
+
 // Convert SQLite placeholders (?) to PostgreSQL placeholders ($1, $2, etc)
 const convertPlaceholders = (sql) => {
   if (!IS_PRODUCTION) return sql;
@@ -381,27 +396,34 @@ const convertPlaceholders = (sql) => {
   return sql.replace(/\?/g, () => `$${paramIndex++}`);
 };
 
-// Convert SQLite INSERT OR REPLACE to PostgreSQL INSERT ... ON CONFLICT
-const convertInsertOrReplace = (sql) => {
+// Add ON CONFLICT clause to converted SQL
+const addOnConflict = (sql) => {
   if (!IS_PRODUCTION) return sql;
+  if (!sql.includes('INSERT INTO')) return sql;
   
-  // Match: INSERT OR REPLACE INTO table (col1, col2) VALUES (?, ?)
-  const match = sql.match(/INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\((.*?)\)\s+VALUES\s*\((.*?)\)/i);
-  if (!match) return sql;
+  // Extract column names from the INSERT statement
+  const insertMatch = sql.match(/INSERT\s+INTO\s+\w+\s*\((.*?)\)\s+VALUES/i);
+  if (!insertMatch) return sql;
   
-  const [, table, columns, ] = match;
-  const cols = columns.split(',').map(c => c.trim());
+  const columnList = insertMatch[1];
+  const columns = columnList.split(',').map(c => c.trim());
   
-  // Build: INSERT INTO table (col1, col2) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET col1=$1, col2=$2
-  const placeholderCount = (sql.match(/\?/g) || []).length;
-  const placeholders = Array.from({length: placeholderCount}, (_, i) => `$${i+1}`).join(',');
-  const updateClauses = cols.filter(c => c !== 'id').map((c, i) => `${c}=$${i+1}`).join(',');
+  // Count parameters used
+  const paramCount = (sql.match(/\$\d+/g) || []).length;
   
-  return sql
-    .replace(/INSERT\s+OR\s+REPLACE\s+INTO/i, 'INSERT INTO')
-    .replace(/VALUES\s*\([^)]+\)/i, `VALUES (${placeholders})`)
-    .concat(` ON CONFLICT (id) DO UPDATE SET ${updateClauses}`);
-};
+  if (!sql.includes('ON CONFLICT')) {
+    // Build UPDATE clause for all columns except id
+    const updateClauses = columns
+      .filter(c => !c.toLowerCase().includes('id'))
+      .map((c, i) => `${c}=$${i+1}`)
+      .join(', ');
+    
+    if (updateClauses) {
+      return sql + ` ON CONFLICT (id) DO UPDATE SET ${updateClauses}`;
+    }
+  }
+  
+  return sql;
 
 // Enhanced database operation wrappers with retry logic and transaction support
 const runSql = (sql, params = []) =>
@@ -412,16 +434,18 @@ const runSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL - convert placeholders
-      const convertedSql = convertPlaceholders(sql);
-      const convertedInsert = convertInsertOrReplace(convertedSql);
+      // PostgreSQL - convert SQL in correct order
+      let convertedSql = convertInsertOrReplace(sql);  // First: handle INSERT OR REPLACE
+      convertedSql = convertPlaceholders(convertedSql);  // Second: convert ? to $1,$2,...
+      convertedSql = addOnConflict(convertedSql);        // Third: add ON CONFLICT if needed
       
-      db.query(convertedInsert, params, (err, result) => {
+      db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database run error:", {
-            sql: convertedInsert.substring(0, 100),
+            sql: convertedSql.substring(0, 100),
             error: err.message,
-            params: params
+            params: params,
+            originalSql: sql.substring(0, 100)
           });
           reject(err);
           return;
