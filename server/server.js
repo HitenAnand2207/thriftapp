@@ -373,6 +373,36 @@ const verifyPassword = (plain, salt, hash) => {
 
 const normalizeStoreName = (name) => (name || "").trim().toLowerCase();
 
+// Convert SQLite placeholders (?) to PostgreSQL placeholders ($1, $2, etc)
+const convertPlaceholders = (sql) => {
+  if (!IS_PRODUCTION) return sql;
+  
+  let paramIndex = 1;
+  return sql.replace(/\?/g, () => `$${paramIndex++}`);
+};
+
+// Convert SQLite INSERT OR REPLACE to PostgreSQL INSERT ... ON CONFLICT
+const convertInsertOrReplace = (sql) => {
+  if (!IS_PRODUCTION) return sql;
+  
+  // Match: INSERT OR REPLACE INTO table (col1, col2) VALUES (?, ?)
+  const match = sql.match(/INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\((.*?)\)\s+VALUES\s*\((.*?)\)/i);
+  if (!match) return sql;
+  
+  const [, table, columns, ] = match;
+  const cols = columns.split(',').map(c => c.trim());
+  
+  // Build: INSERT INTO table (col1, col2) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET col1=$1, col2=$2
+  const placeholderCount = (sql.match(/\?/g) || []).length;
+  const placeholders = Array.from({length: placeholderCount}, (_, i) => `$${i+1}`).join(',');
+  const updateClauses = cols.filter(c => c !== 'id').map((c, i) => `${c}=$${i+1}`).join(',');
+  
+  return sql
+    .replace(/INSERT\s+OR\s+REPLACE\s+INTO/i, 'INSERT INTO')
+    .replace(/VALUES\s*\([^)]+\)/i, `VALUES (${placeholders})`)
+    .concat(` ON CONFLICT (id) DO UPDATE SET ${updateClauses}`);
+};
+
 // Enhanced database operation wrappers with retry logic and transaction support
 const runSql = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -382,11 +412,14 @@ const runSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL
-      db.query(sql, params, (err, result) => {
+      // PostgreSQL - convert placeholders
+      const convertedSql = convertPlaceholders(sql);
+      const convertedInsert = convertInsertOrReplace(convertedSql);
+      
+      db.query(convertedInsert, params, (err, result) => {
         if (err) {
           console.error("❌ Database run error:", {
-            sql: sql.substring(0, 100),
+            sql: convertedInsert.substring(0, 100),
             error: err.message,
             params: params
           });
@@ -420,11 +453,12 @@ const getSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL
-      db.query(sql, params, (err, result) => {
+      // PostgreSQL - convert placeholders
+      const convertedSql = convertPlaceholders(sql);
+      db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database get error:", {
-            sql: sql.substring(0, 100),
+            sql: convertedSql.substring(0, 100),
             error: err.message,
             params: params
           });
@@ -458,11 +492,12 @@ const allSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL
-      db.query(sql, params, (err, result) => {
+      // PostgreSQL - convert placeholders
+      const convertedSql = convertPlaceholders(sql);
+      db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database query error:", {
-            sql: sql.substring(0, 100),
+            sql: convertedSql.substring(0, 100),
             error: err.message,
             params: params
           });
