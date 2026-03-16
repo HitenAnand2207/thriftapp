@@ -7,13 +7,11 @@ import {
   Calendar,
   IndianRupee,
   CheckCircle,
-  Clock,
   ShoppingBag,
   ArrowRight,
   Download,
   MapPin,
   Leaf,
-  TrendingUp,
 } from "lucide-react";
 import SustainabilityDashboard from "../common/SustainabilityDashboard";
 
@@ -23,7 +21,6 @@ const OrderHistory = () => {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' or 'impact'
 
   const { products } = useSelector((state) => state.products);
-  const { user } = useSelector((state) => state.auth);
 
   // Get sold items (simulating orders - in real app, you'd have an orders slice)
   const orders = useMemo(() => {

@@ -28,7 +28,6 @@ import {
 const SustainabilityDashboard = () => {
   const { isDarkMode } = useTheme();
   const { products } = useSelector((state) => state.products);
-  const { user } = useSelector((state) => state.auth);
 
   // Get all sold/purchased items (in real app, this would be orders)
   const purchasedItems = useMemo(() => {
