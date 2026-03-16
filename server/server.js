@@ -81,6 +81,14 @@ const initializeDatabase = () => {
 
 const createTables = () => {
   return new Promise((resolve, reject) => {
+    // Skip table creation in production - tables already exist in Supabase
+    if (IS_PRODUCTION) {
+      console.log("✅ Using existing Supabase tables (skipped table creation in production)");
+      resolve();
+      return;
+    }
+
+    // Development: Create tables using SQLite
     db.serialize(() => {
       // Users table - comprehensive user management
       db.run(`
