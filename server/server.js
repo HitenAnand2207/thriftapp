@@ -373,57 +373,32 @@ const verifyPassword = (plain, salt, hash) => {
 
 const normalizeStoreName = (name) => (name || "").trim().toLowerCase();
 
-// Convert SQLite INSERT OR REPLACE to PostgreSQL INSERT ... ON CONFLICT (MUST run first!)
-const convertInsertOrReplace = (sql) => {
+// Simple SQL converter for PostgreSQL compatibility
+const convertSqlForPostgres = (sql) => {
   if (!IS_PRODUCTION) return sql;
   
-  // Only process INSERT OR REPLACE statements
-  if (!/INSERT\s+OR\s+REPLACE/i.test(sql)) return sql;
+  let converted = sql;
   
-  // Simple approach: Convert INSERT OR REPLACE to ON CONFLICT pattern
-  // Pattern: INSERT OR REPLACE INTO table (col1, col2) VALUES (?, ?, ?)
-  // Convert to: INSERT INTO table (col1, col2) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET col1=$1, col2=$2
+  // Step 1: Convert INSERT OR REPLACE to INSERT  
+  converted = converted.replace(/INSERT\s+OR\s+REPLACE/gi, 'INSERT');
   
-  return sql.replace(/INSERT\s+OR\s+REPLACE\s+INTO/i, 'INSERT INTO');
-  // Note: Placeholder conversion will happen after this
-};
-
-// Convert SQLite placeholders (?) to PostgreSQL placeholders ($1, $2, etc)
-const convertPlaceholders = (sql) => {
-  if (!IS_PRODUCTION) return sql;
-  
+  // Step 2: Convert ? placeholders to $1, $2, $3, etc
   let paramIndex = 1;
-  return sql.replace(/\?/g, () => `$${paramIndex++}`);
-};
-
-// Add ON CONFLICT clause to converted SQL
-const addOnConflict = (sql) => {
-  if (!IS_PRODUCTION) return sql;
-  if (!sql.includes('INSERT INTO')) return sql;
+  converted = converted.replace(/\?/g, () => `$${paramIndex++}`);
   
-  // Extract column names from the INSERT statement
-  const insertMatch = sql.match(/INSERT\s+INTO\s+\w+\s*\((.*?)\)\s+VALUES/i);
-  if (!insertMatch) return sql;
-  
-  const columnList = insertMatch[1];
-  const columns = columnList.split(',').map(c => c.trim());
-  
-  // Count parameters used
-  const paramCount = (sql.match(/\$\d+/g) || []).length;
-  
-  if (!sql.includes('ON CONFLICT')) {
-    // Build UPDATE clause for all columns except id
-    const updateClauses = columns
-      .filter(c => !c.toLowerCase().includes('id'))
-      .map((c, i) => `${c}=$${i+1}`)
-      .join(', ');
-    
-    if (updateClauses) {
-      return sql + ` ON CONFLICT (id) DO UPDATE SET ${updateClauses}`;
+  // Step 3: Add ON CONFLICT for INSERT statements if not already present
+  if (converted.includes('INSERT INTO') && !converted.includes('ON CONFLICT')) {
+    // Try to extract table name and add basic ON CONFLICT
+    const insertMatch = converted.match(/INSERT\s+INTO\s+(\w+)/i);
+    if (insertMatch) {
+      // Append basic ON CONFLICT DO NOTHING for safety
+      // This prevents duplicate key errors
+      converted = converted + ' ON CONFLICT DO NOTHING';
     }
   }
   
-  return sql;
+  return converted;
+};
 
 // Enhanced database operation wrappers with retry logic and transaction support
 const runSql = (sql, params = []) =>
@@ -434,23 +409,20 @@ const runSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL - convert SQL in correct order
-      let convertedSql = convertInsertOrReplace(sql);  // First: handle INSERT OR REPLACE
-      convertedSql = convertPlaceholders(convertedSql);  // Second: convert ? to $1,$2,...
-      convertedSql = addOnConflict(convertedSql);        // Third: add ON CONFLICT if needed
+      // PostgreSQL - convert SQL
+      const convertedSql = convertSqlForPostgres(sql);
       
       db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database run error:", {
-            sql: convertedSql.substring(0, 100),
+            sql: convertedSql.substring(0, 150),
             error: err.message,
-            params: params,
-            originalSql: sql.substring(0, 100)
+            code: err.code
           });
           reject(err);
           return;
         }
-        resolve({ changes: result.rowCount });
+        resolve({ changes: result.rowCount || 0 });
       });
     } else {
       // SQLite
@@ -458,13 +430,12 @@ const runSql = (sql, params = []) =>
         if (err) {
           console.error("❌ Database run error:", {
             sql: sql.substring(0, 100),
-            error: err.message,
-            params: params
+            error: err.message
           });
           reject(err);
           return;
         }
-        resolve(this);
+        resolve({ changes: this.changes || 0 });
       });
     }
   });
@@ -477,14 +448,15 @@ const getSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL - convert placeholders
-      const convertedSql = convertPlaceholders(sql);
+      // PostgreSQL - convert SQL
+      const convertedSql = convertSqlForPostgres(sql);
+      
       db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database get error:", {
-            sql: convertedSql.substring(0, 100),
+            sql: convertedSql.substring(0, 150),
             error: err.message,
-            params: params
+            code: err.code
           });
           reject(err);
           return;
@@ -497,13 +469,12 @@ const getSql = (sql, params = []) =>
         if (err) {
           console.error("❌ Database get error:", {
             sql: sql.substring(0, 100),
-            error: err.message,
-            params: params
+            error: err.message
           });
           reject(err);
           return;
         }
-        resolve(row);
+        resolve(row || null);
       });
     }
   });
@@ -516,14 +487,15 @@ const allSql = (sql, params = []) =>
     }
     
     if (IS_PRODUCTION) {
-      // PostgreSQL - convert placeholders
-      const convertedSql = convertPlaceholders(sql);
+      // PostgreSQL - convert SQL
+      const convertedSql = convertSqlForPostgres(sql);
+      
       db.query(convertedSql, params, (err, result) => {
         if (err) {
           console.error("❌ Database query error:", {
-            sql: convertedSql.substring(0, 100),
+            sql: convertedSql.substring(0, 150),
             error: err.message,
-            params: params
+            code: err.code
           });
           reject(err);
           return;
@@ -536,13 +508,12 @@ const allSql = (sql, params = []) =>
         if (err) {
           console.error("❌ Database all error:", {
             sql: sql.substring(0, 100),
-            error: err.message,
-            params: params
+            error: err.message
           });
           reject(err);
           return;
         }
-        resolve(rows);
+        resolve(rows || []);
       });
     }
   });
