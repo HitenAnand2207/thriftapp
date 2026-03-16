@@ -1,12 +1,12 @@
 {
-  "exportTime": "2026-03-15T18:06:27.559Z",
+  "exportTime": "2026-03-16T11:30:47.247Z",
   "database": {
     "tables": 11,
-    "totalRecords": 14
+    "totalRecords": 21
   },
   "files": {
-    "count": 10,
-    "totalSize": 1558834
+    "count": 14,
+    "totalSize": 2096849
   },
   "exports": {
     "databaseJson": "C:\\AllMyProjects\\Thrift\\thriftapp\\server\\export\\database-export.json",

@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import Menu from "../common/Menu";
 import SearchBar from "../common/SearchBar";
-import ChatWidget from "../common/ChatWidget";
 import { fetchProducts } from "../../redux/slices/productSlice";
 
 const MainLayout = () => {
@@ -184,9 +183,6 @@ const MainLayout = () => {
 
       {/* Slide-out Menu */}
       <Menu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
-      
-      {/* Chat Widget */}
-      <ChatWidget />
     </div>
   );
 };

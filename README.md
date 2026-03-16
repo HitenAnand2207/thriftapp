@@ -29,16 +29,29 @@ npm start
 ```
 
 Frontend: `http://localhost:3000`  
-Backend: `http://localhost:5000`
+Backend: `http://localhost:<PORT from server/.env (or 8000 default)>`
 
 ## Environment Variables
 
 `server/.env` supports:
-- `PORT` (default: `5000`)
+- `PORT` (default: `8000`)
+- `NODE_ENV` (`development` or `production`)
 - `CORS_ORIGIN` (default: `http://localhost:3000`)
 
 Optional frontend API override:
-- `REACT_APP_API_BASE_URL` (default: `http://localhost:5000`)
+- `REACT_APP_API_BASE_URL` (optional; if not set, frontend uses relative `/api` with local proxy)
+- `REACT_APP_RAZORPAY_KEY` (optional; used by Razorpay checkout)
+- `REACT_APP_RAZORPAY_KEY_ID` (legacy alias, still supported)
+
+## Docker MongoDB (Optional)
+
+`docker-compose.mongodb.yml` starts MongoDB + Mongo Express for experiments:
+
+```bash
+docker compose -f docker-compose.mongodb.yml up -d
+```
+
+Current backend (`server/server.js`) is SQLite-based and does not use MongoDB yet.
 
 ## API Endpoints
 

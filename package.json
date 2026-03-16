@@ -28,6 +28,7 @@
     "concurrently": "^9.1.0"
   },
   "scripts": {
+    "preserver": "node server/scripts/free-port.js",
     "server": "nodemon server/server.js",
     "start": "react-scripts start",
     "build": "react-scripts build",

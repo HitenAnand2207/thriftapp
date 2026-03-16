@@ -9,7 +9,7 @@
 npm run deploy:export
 
 # Verify export was successful
-# Check: server/scripts/exported-data.json exists
+# Check: server/export/database-export.json exists
 # Should show: "Export completed: X products, Y total records"
 ```
 
@@ -18,13 +18,16 @@ npm run deploy:export
 - [ ] Create new project (select closest region)
 - [ ] Wait for project to be ready (2-3 minutes)
 - [ ] Go to **Settings → Database**
-- [ ] Copy **Connection String** (URI format)
+- [ ] Copy **Connection String** (URI format)   
 - [ ] Note down your database password
+
 
 #### 3. Set up Cloudinary (Image Hosting)
 - [ ] Go to [cloudinary.com](https://cloudinary.com) and sign up
 - [ ] Go to **Dashboard** 
 - [ ] Copy **Cloud Name**, **API Key**, **API Secret**
+
+622712984879454
 
 ---
 
@@ -57,7 +60,18 @@ Go to **Project Settings → Environment Variables** and add:
 
 ### ✅ DATA MIGRATION PHASE
 
-#### 7. Import Data to Supabase
+#### 7. Import Pre-Stored Seller Data to Supabase ⚠️ **REQUIRED**
+> **IMPORTANT:** Your app comes with pre-stored data from multiple sellers (products, reviews, transactions). Skip this step and your app will load with NO products visible. Users will see an empty marketplace.
+
+**What you're importing:**
+- Pre-stocked products from different sellers (T-shirts, bags, shoes, etc.)
+- Example seller accounts (hiten.01@gamil.com, and others)
+- Product reviews and ratings
+- Transaction history
+- Product images
+
+**Follow these steps:**
+
 ```bash
 # Set environment variables locally first
 export SUPABASE_DATABASE_URL="your-connection-string"
@@ -72,10 +86,21 @@ node server/scripts/import-to-supabase.js
 🚀 Starting Supabase data import...
 📚 Loaded export data: { totalTables: 8, totalRecords: 14 }
 ✅ Connected to Supabase PostgreSQL
-📥 Importing X records to products...
+📥 Importing 5 records to products...
 ✅ Successfully imported products
+📥 Importing 3 records to sellers...
+✅ Successfully imported sellers
+✅ Successfully imported reviews
+✅ Successfully imported transactions
+✅ Successfully imported user_profiles
 🎉 Data import completed successfully!
 ```
+
+**Verify the import worked:**
+- After import completes, visit your Vercel app URL
+- You should see multiple products on the home page
+- Products have different seller names and reviews
+- Product images load correctly
 
 ---
 
@@ -83,11 +108,16 @@ node server/scripts/import-to-supabase.js
 
 #### 8. Test Your Deployed App
 - [ ] Visit your Vercel domain (https://your-app.vercel.app)
-- [ ] Check if products are visible on home page
-- [ ] Test user registration/login
-- [ ] Test adding products to cart
-- [ ] Test seller registration
-- [ ] Test creating new products
+- [ ] **CRITICAL:** Check if pre-stored products are visible on home page (products from sellers like hiten.01@gamil.com)
+- [ ] If NO products visible → **Data import failed** (go back and run Step 7 again)
+- [ ] If products visible → Continue testing:
+  - [ ] Click on different products to view seller details
+  - [ ] Check product review and ratings from other buyers
+  - [ ] View seller profiles and their other products
+  - [ ] Test user registration/login (create new account)
+  - [ ] Test adding products to cart
+  - [ ] Test seller registration with new seller account
+  - [ ] Test creating new products as a seller
 
 #### 9. Verify Database Connection
 - [ ] Check Vercel function logs
@@ -97,6 +127,27 @@ node server/scripts/import-to-supabase.js
 ---
 
 ### ❌ TROUBLESHOOTING COMMON ISSUES
+
+#### If App Loads But NO Products Visible:
+**This means data import failed!**
+
+1. **Did you run Step 7?** Go back and run: `node server/scripts/import-to-supabase.js`
+2. **Check for errors:**
+   ```bash
+   # Re-export to ensure export file exists
+   npm run deploy:export
+   
+   # Try import again
+   node server/scripts/import-to-supabase.js
+   ```
+3. **Verify Supabase connection:**
+   - Check your SUPABASE_DATABASE_URL is correct
+   - Verify database password is accurate
+   - Test Supabase connection in dashboard
+4. **If import still fails:**
+   - Check Supabase PostgreSQL logs for errors
+   - Verify all required tables exist in Supabase
+   - Try running export/import on a fresh Supabase database
 
 #### If Build Fails:
 1. **Check package.json scripts:**
@@ -130,11 +181,13 @@ Your deployment is successful when:
 
 - [ ] ✅ Vercel build completes without errors
 - [ ] ✅ Application loads at your Vercel URL
-- [ ] ✅ Products from local database are visible
+- [ ] ✅ **Pre-stored products from sellers are visible** on home page (THIS IS CRITICAL)
+- [ ] ✅ You can see products with seller names, prices, conditions, and reviews
+- [ ] ✅ Product images load properly
 - [ ] ✅ User registration/login works
 - [ ] ✅ Cart functionality works
-- [ ] ✅ Seller features work
-- [ ] ✅ Images load properly (if using Cloudinary)
+- [ ] ✅ Seller features work (view seller profile, create new products)
+- [ ] ✅ You can search/filter the pre-stored products
 
 ---
 
@@ -143,7 +196,7 @@ Your deployment is successful when:
 #### Quick Diagnostics:
 ```bash
 # Check your exported data
-cat server/scripts/exported-data.json | head -20
+cat server/export/database-export.json | head -20
 
 # Test database connection locally
 node -e "

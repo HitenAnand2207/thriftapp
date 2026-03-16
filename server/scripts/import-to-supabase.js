@@ -15,7 +15,7 @@ async function importToSupabase() {
   
   try {
     // Check if export file exists
-    const exportPath = path.join(__dirname, 'exported-data.json');
+    const exportPath = path.join(__dirname, '..', 'export', 'database-export.json');
     const exportExists = await fs.access(exportPath).then(() => true).catch(() => false);
     
     if (!exportExists) {
@@ -25,7 +25,8 @@ async function importToSupabase() {
 
     // Load exported data
     const exportDataStr = await fs.readFile(exportPath, 'utf8');
-    const exportData = JSON.parse(exportDataStr);
+    const rawExport = JSON.parse(exportDataStr);
+    const exportData = rawExport.database || {};
     
     console.log('📚 Loaded export data:', {
       totalTables: Object.keys(exportData).length,
@@ -72,7 +73,7 @@ async function importToSupabase() {
 }
 
 async function importTable(tableName, records) {
-  if (records.length === 0) return;
+  if (!Array.isArray(records) || records.length === 0) return;
 
   // Get column names from first record
   const columns = Object.keys(records[0]);

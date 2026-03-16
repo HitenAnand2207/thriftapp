@@ -9,29 +9,30 @@ const createDeploymentFiles = () => {
   const envProduction = `# Production Environment Variables
 # Copy this to .env.production and fill in your values
 
-# Database Configuration
-# For Railway PostgreSQL, Supabase, PlanetScale, etc.
-DATABASE_URL=your_cloud_database_url_here
+# Backend runtime (required by server/server.js)
+NODE_ENV=production
+PORT=8000
+CORS_ORIGIN=https://yourdomain.com
 
-# Cloud Storage (Cloudinary, AWS S3, etc.)
+# Frontend public env (optional)
+# REACT_APP_API_BASE_URL=https://api.yourdomain.com
+# REACT_APP_RAZORPAY_KEY=rzp_live_replace_me
+# REACT_APP_RAZORPAY_KEY_ID=rzp_live_replace_me
+
+# Deployment / migration helpers (optional today)
+DATABASE_URL=postgresql://user:password@host:5432/database
+SUPABASE_DATABASE_URL=postgresql://user:password@host:5432/postgres
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 CLOUDINARY_CLOUD_NAME=your_cloudinary_name
 CLOUDINARY_API_KEY=your_cloudinary_key
 CLOUDINARY_API_SECRET=your_cloudinary_secret
-
-# Or AWS S3
 AWS_ACCESS_KEY_ID=your_aws_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret
 AWS_BUCKET_NAME=your_bucket_name
 AWS_REGION=us-east-1
-
-# Server Configuration
-NODE_ENV=production
-PORT=5000
-CORS_ORIGIN=https://yourdomain.com
-
-# API Keys
-RAZORPAY_KEY_ID=your_razorpay_key
-RAZORPAY_KEY_SECRET=your_razorpay_secret
+RAZORPAY_KEY_ID=rzp_live_replace_me
+RAZORPAY_KEY_SECRET=replace_me
 `;
 
   fs.writeFileSync(path.join(__dirname, "../.env.production.template"), envProduction);
@@ -59,7 +60,7 @@ RAZORPAY_KEY_SECRET=your_razorpay_secret
       },
       {
         "src": "/(.*)",
-        "dest": "/$1"
+        "dest": "/build/$1"
       }
     ],
     "env": {
@@ -91,7 +92,7 @@ npm run server
   fs.writeFileSync(path.join(__dirname, "../railway-deploy.sh"), railwayDeploy);
 
   // Create Heroku Procfile
-  const procfile = `web: cd server && node server.js
+  const procfile = `web: node server/server.js
 `;
 
   fs.writeFileSync(path.join(__dirname, "../../Procfile"), procfile);

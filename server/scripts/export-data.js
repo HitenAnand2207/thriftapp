@@ -82,13 +82,13 @@ const exportData = async () => {
     
     // Create SQL export for easier cloud database import
     const sqlExportPath = path.join(EXPORT_DIR, "database-export.sql");
-    let sqlContent = "-- ThriftApp Database Export\\n";
-    sqlContent += `-- Generated on: ${new Date().toISOString()}\\n\\n`;
+    let sqlContent = "-- ThriftApp Database Export\n";
+    sqlContent += `-- Generated on: ${new Date().toISOString()}\n\n`;
     
     for (const [tableName, tableData] of Object.entries(exportData.database)) {
       if (tableData.length > 0) {
         const columns = Object.keys(tableData[0]);
-        sqlContent += `-- Table: ${tableName}\\n`;
+        sqlContent += `-- Table: ${tableName}\n`;
         
         tableData.forEach(row => {
           const values = columns.map(col => {
@@ -98,10 +98,10 @@ const exportData = async () => {
             return val;
           }).join(', ');
           
-          sqlContent += `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values});\\n`;
+          sqlContent += `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values});\n`;
         });
         
-        sqlContent += `\\n`;
+        sqlContent += `\n`;
       }
     }
     
@@ -129,7 +129,7 @@ const exportData = async () => {
     const summaryPath = path.join(EXPORT_DIR, "export-summary.json");
     fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
     
-    console.log("\\n🎉 Export Complete!");
+    console.log("\n🎉 Export Complete!");
     console.log(`📊 Database: ${summary.database.tables} tables, ${summary.database.totalRecords} records`);
     console.log(`📁 Files: ${summary.files.count} files, ${(summary.files.totalSize / 1024 / 1024).toFixed(2)}MB`);
     console.log(`📂 Export directory: ${EXPORT_DIR}`);

@@ -1,5 +1,12 @@
 // src/utils/razorpay.js
 
+const RAZORPAY_SCRIPT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+const DEFAULT_RAZORPAY_KEY = "rzp_test_RmonAWA4BACRC9";
+const RAZORPAY_PUBLIC_KEY =
+  process.env.REACT_APP_RAZORPAY_KEY ||
+  process.env.REACT_APP_RAZORPAY_KEY_ID ||
+  DEFAULT_RAZORPAY_KEY;
+
 /**
  * Dynamically load Razorpay script
  */
@@ -13,7 +20,7 @@ export const loadRazorpayScript = () => {
 
     const script = document.createElement("script");
     script.id = "razorpay-script";
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src = RAZORPAY_SCRIPT_SRC;
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
@@ -51,10 +58,10 @@ export const openRazorpayCheckout = async ({
   }
 
   // Get Razorpay key from environment or use test key
-  const razorpayKey = process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_RqDSfql7QKgeYb";
+  const razorpayKey = RAZORPAY_PUBLIC_KEY;
   
   // Warn if using placeholder key
-  if (razorpayKey === "rzp_test_RqDSfql7QKgeYb") {
+  if (razorpayKey === DEFAULT_RAZORPAY_KEY) {
     console.warn("⚠️ Using placeholder Razorpay key. Please add your real key to .env file");
   }
 

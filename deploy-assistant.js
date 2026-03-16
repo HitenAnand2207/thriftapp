@@ -75,7 +75,7 @@ class DeploymentAssistant {
   async checkExportedData() {
     console.log('📊 Checking Exported Data...\n');
 
-    const exportPath = path.join('server', 'scripts', 'exported-data.json');
+    const exportPath = path.join('server', 'export', 'database-export.json');
     
     const hasExport = await this.check('Export file exists', async () => {
       return await fs.access(exportPath).then(() => true).catch(() => false);
@@ -83,7 +83,8 @@ class DeploymentAssistant {
 
     if (hasExport) {
       await this.check('Export contains data', async () => {
-        const data = JSON.parse(await fs.readFile(exportPath, 'utf8'));
+        const raw = JSON.parse(await fs.readFile(exportPath, 'utf8'));
+        const data = raw.database || {};
         const recordCount = Object.values(data).reduce((sum, table) => sum + table.length, 0);
         console.log(`\n   📈 Found ${recordCount} records across ${Object.keys(data).length} tables`);
         return recordCount > 0;
@@ -154,8 +155,9 @@ class DeploymentAssistant {
 
     // Show quick stats if export exists
     try {
-      const exportPath = path.join('server', 'scripts', 'exported-data.json');
-      const data = JSON.parse(await fs.readFile(exportPath, 'utf8'));
+      const exportPath = path.join('server', 'export', 'database-export.json');
+      const raw = JSON.parse(await fs.readFile(exportPath, 'utf8'));
+      const data = raw.database || {};
       const stats = {};
       
       for (const [table, records] of Object.entries(data)) {

@@ -1,11 +1,12 @@
 # 🚀 VERCEL DEPLOYMENT GUIDE - FOOLPROOF EDITION
 
 ## 🎯 **What This Guide Accomplishes**
-- Deploy ThriftApp to Vercel with **ALL 9 products**
+- Deploy ThriftApp to Vercel with **pre-stored data from multiple sellers**
+- Import 14 pre-configured records including products, sellers, and reviews
 - Set up free Supabase database with your data
-- Configure Cloudinary for image hosting
+- Configure Cloudinary for image hosting  
 - Fix common deployment failures
-- **Result**: Live app with all your local products!
+- **Result**: Live app with pre-populated seller marketplace with products already visible!
 
 ---
 
@@ -70,9 +71,11 @@ ls server/export/
 
 ### 1.4 **Verify Data Import**
 1. In Supabase → **Table Editor** → **products** table
-2. Should see **9 rows** with your products
-3. Check **users** table → Should see **1 row**
-4. Check **seller_accounts** → Should see **3 rows**
+2. Should see **5+ product rows** from pre-stored data
+3. Check **users** table → Should see **multiple user rows**
+4. Check **sellers** table → Should see **3+ seller rows**
+5. Check **reviews** table → Should see **review rows**
+6. **Data import status**: Should see ~14 total records imported
 
 ---
 
@@ -249,7 +252,7 @@ if (isDevelopment) {
 ```javascript
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://your-app.vercel.app' 
-  : 'http://localhost:5000';
+  : 'http://localhost:8000';
 ```
 
 ---
@@ -310,10 +313,13 @@ module.exports = dbConnection;
 1. Go to your Vercel app URL: `https://your-app.vercel.app`
 2. Check these pages work:
    - ✅ Homepage loads
-   - ✅ Products page shows all 9 products
+   - ✅ **Products page shows the pre-stored products from multiple sellers** (THIS IS CRITICAL)
+   - ✅ You can see different products with seller names, prices, and conditions
    - ✅ Product images display correctly
    - ✅ User signup/login works
    - ✅ Cart functionality works
+   
+**If NO products are visible**: Data import failed! Go back and verify Step 1.3 (SQL import) completed successfully.
 
 ### 6.2 **Test API Endpoints**
 Open browser console and test:
@@ -321,12 +327,23 @@ Open browser console and test:
 // Test health endpoint
 fetch('/api/health').then(r => r.json()).then(console.log)
 
-// Test products endpoint  
-fetch('/api/products').then(r => r.json()).then(console.log)
+// Test products endpoint - should return pre-stored products
+fetch('/api/products').then(r => r.json()).then(data => {
+  console.log(`Found ${data.length} products from sellers`);
+  console.log(data);
+})
+
+// Test sellers endpoint
+fetch('/api/sellers').then(r => r.json()).then(console.log)
 
 // Test storage stats
 fetch('/api/admin/storage-stats').then(r => r.json()).then(console.log)
 ```
+
+**Expected results:**
+- Products endpoint should return 5+ pre-stored products
+- Your app should show products from different sellers
+- Images should be served from Cloudinary URLs
 
 ### 6.3 **Verify Database Connection**
 1. Go to `https://your-app.vercel.app/api/admin/health-check`
@@ -347,6 +364,31 @@ fetch('/api/admin/storage-stats').then(r => r.json()).then(console.log)
 ---
 
 ## 🚨 **TROUBLESHOOTING COMMON FAILURES**
+
+### Problem: **No Products Visible (Empty Marketplace)** ⚠️ CRITICAL
+**Root cause**: Data import (Step 1.3) did not complete successfully
+
+**Solution**:
+1. Go back to Supabase dashboard → **SQL Editor**
+2. Verify these tables have data:
+   ```sql
+   -- Check how many products exist
+   SELECT COUNT(*) as product_count FROM products;
+   
+   -- Check how many sellers exist
+   SELECT COUNT(*) as seller_count FROM sellers;
+   
+   -- List all products
+   SELECT id, name, price, sellerEmail FROM products;
+   ```
+3. If you see 0 products:
+   - The SQL import (Step 1.3) failed
+   - Re-run the SQL in Supabase SQL Editor
+   - Copy content from `server/export/database-export.sql`
+   - Paste and run again
+4. After fixing, check your Vercel app - products should now be visible
+
+**Warning**: An app that shows no products looks broken to users. The pre-stored data is essential for a working demo!
 
 ### Problem: **"Module not found: 'sqlite3'"**
 **Solution**: Remove SQLite from production build:

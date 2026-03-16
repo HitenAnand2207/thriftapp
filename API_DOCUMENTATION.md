@@ -2,7 +2,7 @@
 
 ## Base URL
 
-`http://localhost:5000`
+`http://localhost:<PORT from server/.env (default 8000)>`
 
 ## Endpoints
 
@@ -29,7 +29,7 @@ Example item:
   "size": "M",
   "condition": "Good",
   "description": "Classic wash denim jacket",
-  "imageUrl": "http://localhost:5000/uploads/1734025600123-123456789.jpg",
+  "imageUrl": "http://localhost:8000/uploads/1734025600123-123456789.jpg",
   "sellerEmail": "seller@example.com",
   "listedAt": "2025-12-12T16:00:00.000Z",
   "soldAt": null,
