@@ -5,11 +5,14 @@ const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { Pool } = require("pg"); // PostgreSQL for production
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const IS_PRODUCTION = NODE_ENV === "production";
 
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
@@ -20,26 +23,59 @@ fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Enhanced database connection with better error handling and connection management
 let db;
+let dbType = IS_PRODUCTION ? "postgresql" : "sqlite";
 
 const initializeDatabase = () => {
   return new Promise((resolve, reject) => {
-    db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-      if (err) {
-        console.error("❌ Database connection error:", err.message);
-        reject(err);
+    if (IS_PRODUCTION) {
+      // Production: Use PostgreSQL/Supabase
+      const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+      
+      if (!connectionString) {
+        console.error("❌ DATABASE_URL or SUPABASE_DATABASE_URL environment variable is required for production");
+        reject(new Error("Database connection string not provided"));
         return;
       }
-      console.log("✅ Connected to SQLite database at", DB_PATH);
-      
-      // Enable foreign keys and WAL mode for better performance and data integrity
-      db.run("PRAGMA foreign_keys = ON");
-      db.run("PRAGMA journal_mode = WAL");
-      db.run("PRAGMA synchronous = NORMAL");
-      db.run("PRAGMA cache_size = 1000");
-      db.run("PRAGMA temp_store = memory");
-      
-      resolve();
-    });
+
+      db = new Pool({
+        connectionString,
+        ssl: { rejectUnauthorized: false }
+      });
+
+      db.on('error', (err) => {
+        console.error('❌ PostgreSQL pool error:', err);
+      });
+
+      // Test connection
+      db.query('SELECT NOW()', (err, result) => {
+        if (err) {
+          console.error("❌ PostgreSQL connection error:", err.message);
+          reject(err);
+          return;
+        }
+        console.log("✅ Connected to PostgreSQL database at", connectionString.split("@")[1]);
+        resolve();
+      });
+    } else {
+      // Development: Use SQLite
+      db = new sqlite3.Database(DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+        if (err) {
+          console.error("❌ Database connection error:", err.message);
+          reject(err);
+          return;
+        }
+        console.log("✅ Connected to SQLite database at", DB_PATH);
+        
+        // Enable foreign keys and WAL mode for better performance and data integrity
+        db.run("PRAGMA foreign_keys = ON");
+        db.run("PRAGMA journal_mode = WAL");
+        db.run("PRAGMA synchronous = NORMAL");
+        db.run("PRAGMA cache_size = 1000");
+        db.run("PRAGMA temp_store = memory");
+        
+        resolve();
+      });
+    }
   });
 };
 
@@ -323,18 +359,35 @@ const runSql = (sql, params = []) =>
       return;
     }
     
-    db.run(sql, params, function onRun(err) {
-      if (err) {
-        console.error("❌ Database run error:", {
-          sql: sql.substring(0, 100),
-          error: err.message,
-          params: params
-        });
-        reject(err);
-        return;
-      }
-      resolve(this);
-    });
+    if (IS_PRODUCTION) {
+      // PostgreSQL
+      db.query(sql, params, (err, result) => {
+        if (err) {
+          console.error("❌ Database run error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve({ changes: result.rowCount });
+      });
+    } else {
+      // SQLite
+      db.run(sql, params, function onRun(err) {
+        if (err) {
+          console.error("❌ Database run error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve(this);
+      });
+    }
   });
 
 const getSql = (sql, params = []) =>
@@ -344,18 +397,35 @@ const getSql = (sql, params = []) =>
       return;
     }
     
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        console.error("❌ Database get error:", {
-          sql: sql.substring(0, 100),
-          error: err.message,
-          params: params
-        });
-        reject(err);
-        return;
-      }
-      resolve(row);
-    });
+    if (IS_PRODUCTION) {
+      // PostgreSQL
+      db.query(sql, params, (err, result) => {
+        if (err) {
+          console.error("❌ Database get error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve(result.rows ? result.rows[0] : null);
+      });
+    } else {
+      // SQLite
+      db.get(sql, params, (err, row) => {
+        if (err) {
+          console.error("❌ Database get error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve(row);
+      });
+    }
   });
 
 const allSql = (sql, params = []) =>
@@ -365,18 +435,35 @@ const allSql = (sql, params = []) =>
       return;
     }
     
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        console.error("❌ Database all error:", {
-          sql: sql.substring(0, 100),
-          error: err.message,
-          params: params
-        });
-        reject(err);
-        return;
-      }
-      resolve(rows);
-    });
+    if (IS_PRODUCTION) {
+      // PostgreSQL
+      db.query(sql, params, (err, result) => {
+        if (err) {
+          console.error("❌ Database query error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve(result.rows || []);
+      });
+    } else {
+      // SQLite
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          console.error("❌ Database all error:", {
+            sql: sql.substring(0, 100),
+            error: err.message,
+            params: params
+          });
+          reject(err);
+          return;
+        }
+        resolve(rows);
+      });
+    }
   });
 
 // Transaction helper for atomic operations
