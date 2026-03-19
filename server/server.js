@@ -1405,8 +1405,9 @@ app.post("/api/seller-auth/login", async (req, res) => {
       "SELECT * FROM seller_accounts WHERE normalizedStoreName = ?",
       [normalizedStoreName]
     );
-
-    if (!row || !verifyPassword(String(password), row.passwordSalt, row.passwordHash)) {
+    const passwordSalt = row?.passwordSalt || row?.passwordsalt || "";
+    const passwordHash = row?.passwordHash || row?.passwordhash || "";
+    if (!row || !passwordSalt || !passwordHash || !verifyPassword(String(password), passwordSalt, passwordHash)) {
       return res.status(401).json({ message: "Invalid store name or password" });
     }
 
@@ -1414,9 +1415,9 @@ app.post("/api/seller-auth/login", async (req, res) => {
       seller: {
         id: row.id,
         sellerId: row.id,
-        name: row.storeName,
-        storeName: row.storeName,
-        email: row.sellerEmail,
+        name: row.storeName || row.storename,
+        storeName: row.storeName || row.storename,
+        email: row.sellerEmail || row.selleremail,
         phone: row.phone,
         isSeller: true,
       },
