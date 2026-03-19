@@ -113,3 +113,23 @@ code {
 .brand-gradient {
   background-image: linear-gradient(130deg, var(--accent-start), var(--accent-end));
 }
+
+/* Keep seller auth inputs readable even with browser autofill and theme changes */
+.seller-auth-screen input,
+.seller-auth-screen select {
+  color: #0f172a;
+  caret-color: #0f172a;
+}
+
+.seller-auth-screen input::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.seller-auth-screen input:-webkit-autofill,
+.seller-auth-screen input:-webkit-autofill:hover,
+.seller-auth-screen input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  transition: background-color 9999s ease-in-out 0s;
+}

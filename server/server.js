@@ -6,6 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { Pool } = require("pg"); // PostgreSQL for production
+const { v2: cloudinary } = require("cloudinary");
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
@@ -17,19 +18,34 @@ const IS_PRODUCTION = NODE_ENV === "production";
 const DATA_DIR = path.join(__dirname, "data");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 const DB_PATH = path.join(DATA_DIR, "thriftapp.db");
+const CLOUDINARY_CLOUD_NAME = (process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+const CLOUDINARY_API_KEY = (process.env.CLOUDINARY_API_KEY || "").trim();
+const CLOUDINARY_API_SECRET = (process.env.CLOUDINARY_API_SECRET || "").trim();
+const CLOUDINARY_FOLDER = (process.env.CLOUDINARY_FOLDER || "thriftapp").trim();
+const USE_CLOUDINARY_STORAGE = Boolean(
+  CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET
+);
+
+if (USE_CLOUDINARY_STORAGE) {
+  cloudinary.config({
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET,
+    secure: true,
+  });
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // Enhanced database connection with better error handling and connection management
 let db;
-let dbType = IS_PRODUCTION ? "postgresql" : "sqlite";
 
 const initializeDatabase = () => {
   return new Promise((resolve, reject) => {
     if (IS_PRODUCTION) {
       // Production: Use PostgreSQL/Supabase
-      const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+      const connectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || "").trim();
       
       if (!connectionString) {
         console.error("❌ DATABASE_URL or SUPABASE_DATABASE_URL environment variable is required for production");
@@ -53,7 +69,13 @@ const initializeDatabase = () => {
           reject(err);
           return;
         }
-        console.log("✅ Connected to PostgreSQL database at", connectionString.split("@")[1]);
+        let targetHost = "configured host";
+        try {
+          targetHost = new URL(connectionString).host;
+        } catch (_urlParseError) {
+          // Keep default host label if URL parsing fails.
+        }
+        console.log("✅ Connected to PostgreSQL database at", targetHost);
         resolve();
       });
     } else {
@@ -302,7 +324,6 @@ const gracefulShutdown = () => {
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGUSR2', gracefulShutdown); // For nodemon restarts
-process.on('SIGUSR2', gracefulShutdown); // For nodemon restarts
 
 const defaultCorsOrigins = [
   "http://localhost:3000",
@@ -335,7 +356,7 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 // Make database available to routes
 app.set('db', db);
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || "").toLowerCase();
@@ -344,8 +365,10 @@ const storage = multer.diskStorage({
   },
 });
 
+const uploadStorage = USE_CLOUDINARY_STORAGE ? multer.memoryStorage() : diskStorage;
+
 const upload = multer({
-  storage,
+  storage: uploadStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype || !file.mimetype.startsWith("image/")) {
@@ -354,6 +377,30 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+const uploadImageToCloudinary = (file) =>
+  new Promise((resolve, reject) => {
+    if (!file || !file.buffer) {
+      reject(new Error("Invalid image file"));
+      return;
+    }
+
+    const uploadOptions = {
+      resource_type: "image",
+      folder: CLOUDINARY_FOLDER,
+      unique_filename: true,
+    };
+
+    const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(result);
+    });
+
+    stream.end(file.buffer);
+  });
 
 const mapProductRow = (row) => ({
   ...row,
@@ -520,81 +567,98 @@ const allSql = (sql, params = []) =>
 
 // Transaction helper for atomic operations
 const runTransaction = async (operations) => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error("Database not initialized"));
-      return;
+  if (!db) {
+    throw new Error("Database not initialized");
+  }
+
+  if (IS_PRODUCTION) {
+    const client = await db.connect();
+    const txRunSql = (sql, params = []) =>
+      new Promise((resolve, reject) => {
+        const convertedSql = convertSqlForPostgres(sql);
+        client.query(convertedSql, params, (err, result) => {
+          if (err) {
+            console.error("❌ Transaction query error:", {
+              sql: convertedSql.substring(0, 150),
+              error: err.message,
+              code: err.code,
+            });
+            reject(err);
+            return;
+          }
+          resolve({ changes: result.rowCount || 0, rows: result.rows || [] });
+        });
+      });
+
+    try {
+      await txRunSql("BEGIN");
+
+      const results = [];
+      for (const operation of operations) {
+        if (typeof operation !== "function") {
+          continue;
+        }
+        const result = operation.length > 0 ? await operation(txRunSql) : await operation();
+        results.push(result);
+      }
+
+      await txRunSql("COMMIT");
+      return results;
+    } catch (opErr) {
+      console.error("❌ Transaction operation error:", opErr.message);
+      try {
+        await txRunSql("ROLLBACK");
+      } catch (rollbackErr) {
+        console.error("❌ Transaction rollback error:", rollbackErr.message);
+      }
+      throw opErr;
+    } finally {
+      client.release();
     }
+  }
 
-    if (IS_PRODUCTION) {
-      // PostgreSQL: Use client transactions
-      db.connect().then(client => {
-        client.query('BEGIN', (err) => {
-          if (err) {
-            console.error("❌ Transaction begin error:", err.message);
-            client.release();
-            reject(err);
-            return;
-          }
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run("BEGIN TRANSACTION", (beginErr) => {
+        if (beginErr) {
+          console.error("❌ Transaction begin error:", beginErr.message);
+          reject(beginErr);
+          return;
+        }
 
-          Promise.all(operations.map(op => op()))
-            .then(results => {
-              client.query('COMMIT', (commitErr) => {
-                if (commitErr) {
-                  console.error("❌ Transaction commit error:", commitErr.message);
-                  client.query('ROLLBACK');
-                  client.release();
-                  reject(commitErr);
-                  return;
-                }
-                client.release();
-                resolve(results);
-              });
-            })
-            .catch(opErr => {
-              console.error("❌ Transaction operation error:", opErr.message);
-              client.query('ROLLBACK', () => {
-                client.release();
-                reject(opErr);
-              });
+        const txRunSql = (sql, params = []) => runSql(sql, params);
+
+        (async () => {
+          try {
+            const results = [];
+            for (const operation of operations) {
+              if (typeof operation !== "function") {
+                continue;
+              }
+              const result = operation.length > 0 ? await operation(txRunSql) : await operation();
+              results.push(result);
+            }
+
+            db.run("COMMIT", (commitErr) => {
+              if (commitErr) {
+                console.error("❌ Transaction commit error:", commitErr.message);
+                reject(commitErr);
+                return;
+              }
+              resolve(results);
             });
-        });
-      }).catch(err => {
-        console.error("❌ Failed to get database client:", err.message);
-        reject(err);
-      });
-    } else {
-      // SQLite: Use db.serialize()
-      db.serialize(() => {
-        db.run("BEGIN TRANSACTION", (err) => {
-          if (err) {
-            console.error("❌ Transaction begin error:", err.message);
-            reject(err);
-            return;
-          }
-
-          Promise.all(operations.map(op => op()))
-            .then(results => {
-              db.run("COMMIT", (commitErr) => {
-                if (commitErr) {
-                  console.error("❌ Transaction commit error:", commitErr.message);
-                  reject(commitErr);
-                  return;
-                }
-                resolve(results);
-              });
-            })
-            .catch(opErr => {
-              console.error("❌ Transaction operation error:", opErr.message);
-              db.run("ROLLBACK", (rollbackErr) => {
-                if (rollbackErr) {
-                  console.error("❌ Transaction rollback error:", rollbackErr.message);
-                }
-                reject(opErr);
-              });
+          } catch (opErr) {
+            console.error("❌ Transaction operation error:", opErr.message);
+            db.run("ROLLBACK", (rollbackErr) => {
+              if (rollbackErr) {
+                console.error("❌ Transaction rollback error:", rollbackErr.message);
+              }
+              reject(opErr);
             });
-        });
+          }
+        })();
       });
+    });
   });
 };
 
@@ -801,17 +865,17 @@ app.post("/api/orders", async (req, res) => {
     const now = new Date().toISOString();
 
     await runTransaction([
-      () => runSql(`
+      (txRunSql) => txRunSql(`
         INSERT INTO orders (id, userId, totalAmount, status, paymentId, paymentMethod, shippingAddress, orderItems, placedAt, updatedAt)
         VALUES (?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?)
-      `, [orderId, userId, totalAmount, paymentId, paymentMethod, JSON.stringify(orderItems), shippingAddress, now, now]),
+      `, [orderId, userId, totalAmount, paymentId, paymentMethod, shippingAddress, JSON.stringify(orderItems), now, now]),
       
       // Clear user's cart after order
-      () => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]),
+      (txRunSql) => txRunSql("DELETE FROM cart_items WHERE userId = ?", [userId]),
       
       // Mark products as sold
       ...orderItems.map(item => 
-        () => runSql("UPDATE products SET status = 'sold', soldAt = ? WHERE id = ?", [now, item.productId])
+        (txRunSql) => txRunSql("UPDATE products SET status = 'sold', soldAt = ? WHERE id = ?", [now, item.productId])
       )
     ]);
 
@@ -850,14 +914,14 @@ app.post("/api/sync/user-data", async (req, res) => {
     // Sync cart items if provided
     if (localStorageData.cartItems && Array.isArray(localStorageData.cartItems)) {
       // Clear existing cart items for this user
-      operations.push(() => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
+      operations.push((txRunSql) => txRunSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
       
       // Add current cart items
       localStorageData.cartItems.forEach(item => {
         if (item.product && item.product.id) {
           const cartItemId = `CART${Date.now()}${Math.floor(Math.random() * 10000)}`;
           const now = new Date().toISOString();
-          operations.push(() => runSql(`
+          operations.push((txRunSql) => txRunSql(`
             INSERT OR REPLACE INTO cart_items (id, userId, productId, quantity, addedAt)
             VALUES (?, ?, ?, ?, ?)
           `, [cartItemId, userId, item.product.id, item.quantity || 1, now]));
@@ -868,14 +932,14 @@ app.post("/api/sync/user-data", async (req, res) => {
     // Sync wishlist items if provided
     if (localStorageData.wishlistItems && Array.isArray(localStorageData.wishlistItems)) {
       // Clear existing wishlist items for this user
-      operations.push(() => runSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
+      operations.push((txRunSql) => txRunSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
       
       // Add current wishlist items
       localStorageData.wishlistItems.forEach(item => {
         if (item.product && item.product.id) {
           const wishlistItemId = `WISH${Date.now()}${Math.floor(Math.random() * 10000)}`;
           const now = new Date().toISOString();
-          operations.push(() => runSql(`
+          operations.push((txRunSql) => txRunSql(`
             INSERT OR REPLACE INTO wishlist_items (id, userId, productId, addedAt)
             VALUES (?, ?, ?, ?)
           `, [wishlistItemId, userId, item.product.id, now]));
@@ -1038,9 +1102,9 @@ app.post("/api/backup/restore", async (req, res) => {
 
     // Restore cart items
     if (backupData.data.cartItems) {
-      operations.push(() => runSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
+      operations.push((txRunSql) => txRunSql("DELETE FROM cart_items WHERE userId = ?", [userId]));
       backupData.data.cartItems.forEach(item => {
-        operations.push(() => runSql(`
+        operations.push((txRunSql) => txRunSql(`
           INSERT INTO cart_items (id, userId, productId, quantity, addedAt)
           VALUES (?, ?, ?, ?, ?)
         `, [item.id, item.userId, item.productId, item.quantity, item.addedAt]));
@@ -1049,9 +1113,9 @@ app.post("/api/backup/restore", async (req, res) => {
 
     // Restore wishlist items
     if (backupData.data.wishlistItems) {
-      operations.push(() => runSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
+      operations.push((txRunSql) => txRunSql("DELETE FROM wishlist_items WHERE userId = ?", [userId]));
       backupData.data.wishlistItems.forEach(item => {
-        operations.push(() => runSql(`
+        operations.push((txRunSql) => txRunSql(`
           INSERT INTO wishlist_items (id, userId, productId, addedAt)
           VALUES (?, ?, ?, ?)
         `, [item.id, item.userId, item.productId, item.addedAt]));
@@ -1112,8 +1176,13 @@ app.get("/api/admin/storage-stats", async (_req, res) => {
 
     // File system statistics
     try {
-      const dbStats = fs.statSync(DB_PATH);
-      stats.files.databaseSize = dbStats.size;
+      if (IS_PRODUCTION) {
+        // In PostgreSQL production, the database is remote/managed.
+        stats.files.databaseSize = 'N/A (managed PostgreSQL)';
+      } else {
+        const dbStats = fs.statSync(DB_PATH);
+        stats.files.databaseSize = dbStats.size;
+      }
       
       const uploadFiles = fs.readdirSync(UPLOADS_DIR);
       stats.files.uploadCount = uploadFiles.length;
@@ -1201,13 +1270,13 @@ app.post("/api/admin/cleanup", async (req, res) => {
     const operations = [];
 
     // Clean up old expired sessions
-    operations.push(() => runSql("DELETE FROM user_sessions WHERE expiresAt < ?", [new Date().toISOString()]));
+    operations.push((txRunSql) => txRunSql("DELETE FROM user_sessions WHERE expiresAt < ?", [new Date().toISOString()]));
 
     // Clean up old cart items (older than specified days)
-    operations.push(() => runSql("DELETE FROM cart_items WHERE addedAt < ?", [cutoffISO]));
+    operations.push((txRunSql) => txRunSql("DELETE FROM cart_items WHERE addedAt < ?", [cutoffISO]));
 
     // Clean up old backups
-    operations.push(() => runSql(`
+    operations.push((txRunSql) => txRunSql(`
       DELETE FROM app_settings 
       WHERE key LIKE 'user_backup_%' AND updatedAt < ?
     `, [cutoffISO]));
@@ -1362,8 +1431,20 @@ app.post("/api/products", upload.single("image"), async (req, res) => {
 
     const id = `PROD${Date.now()}${Math.floor(Math.random() * 10000)}`;
     const listedAt = new Date().toISOString();
-    const imagePath = req.file.path;
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    let imagePath = "";
+    let imageUrl = "";
+
+    if (USE_CLOUDINARY_STORAGE) {
+      const uploaded = await uploadImageToCloudinary(req.file);
+      imagePath = uploaded.public_id || "";
+      imageUrl = uploaded.secure_url || uploaded.url || "";
+      if (!imagePath || !imageUrl) {
+        throw new Error("Cloudinary upload did not return image metadata");
+      }
+    } else {
+      imagePath = req.file.path;
+      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    }
 
     await runSql(
       `
@@ -1427,7 +1508,16 @@ app.delete("/api/products/:id", async (req, res) => {
 
     await runSql("DELETE FROM products WHERE id = ?", [id]);
 
-    if (existing.imagePath && fs.existsSync(existing.imagePath)) {
+    const isCloudinaryAsset =
+      typeof existing.imageUrl === "string" && existing.imageUrl.includes("res.cloudinary.com");
+
+    if (USE_CLOUDINARY_STORAGE && isCloudinaryAsset && existing.imagePath) {
+      try {
+        await cloudinary.uploader.destroy(existing.imagePath, { resource_type: "image" });
+      } catch (destroyError) {
+        console.warn("⚠️ Failed to remove Cloudinary image:", destroyError.message);
+      }
+    } else if (existing.imagePath && fs.existsSync(existing.imagePath)) {
       fs.unlinkSync(existing.imagePath);
     }
 
@@ -1467,7 +1557,11 @@ const startServer = async () => {
     const server = app.listen(PORT, () => {
       console.log(`✅ API running on http://localhost:${PORT}`);
       console.log(`📁 Database: ${DB_PATH}`);
-      console.log(`📂 Uploads: ${UPLOADS_DIR}`);
+      if (USE_CLOUDINARY_STORAGE) {
+        console.log(`☁️ Image storage: Cloudinary (${CLOUDINARY_FOLDER})`);
+      } else {
+        console.log(`📂 Uploads: ${UPLOADS_DIR}`);
+      }
     });
 
     // Handle server errors

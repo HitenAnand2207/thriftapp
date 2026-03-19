@@ -1,62 +1,71 @@
 # ThriftApp
 
-Thrift marketplace app with:
+Thrift marketplace application with:
 - React frontend
 - Express backend
-- SQLite persistent storage for products
-- Disk-based image uploads served as public URLs
+- PostgreSQL (Neon) in production
+- Cloudinary for shared product image storage
 
-## Persistent Image Storage
-
-Images are uploaded to `server/uploads/` and product metadata is stored in `server/data/thriftapp.db`.
-Because products are fetched from the backend API, all users now see the same products and pictures.
-
-## Run Locally
+## Quick Start (Local)
 
 1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Start backend API:
+2. Start backend:
 ```bash
 npm run server
 ```
 
-3. In another terminal, start frontend:
+3. Start frontend:
 ```bash
 npm start
 ```
 
 Frontend: `http://localhost:3000`  
-Backend: `http://localhost:<PORT from server/.env (or 8000 default)>`
+Backend: `http://localhost:8050` (or `PORT` from `server/.env`)
 
 ## Environment Variables
 
-`server/.env` supports:
-- `PORT` (default: `8000`)
+Backend (`server/.env`):
+- `PORT`
 - `NODE_ENV` (`development` or `production`)
-- `CORS_ORIGIN` (default: `http://localhost:3000`)
+- `CORS_ORIGIN`
+- `DATABASE_URL` (required in production)
+- `SUPABASE_DATABASE_URL` (optional alias)
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_FOLDER` (optional, default: `thriftapp`)
 
-Optional frontend API override:
-- `REACT_APP_API_BASE_URL` (optional; if not set, frontend uses relative `/api` with local proxy)
-- `REACT_APP_RAZORPAY_KEY` (optional; used by Razorpay checkout)
-- `REACT_APP_RAZORPAY_KEY_ID` (legacy alias, still supported)
+Frontend (`.env.local`):
+- `REACT_APP_API_BASE_URL` (set to backend URL in deployed frontend)
+- `REACT_APP_RAZORPAY_KEY` (optional)
+- `REACT_APP_RAZORPAY_KEY_ID` (legacy alias)
 
-## Docker MongoDB (Optional)
+Do not commit real secrets. Use templates:
+- `.env.template`
+- `.env.production.template`
+- `server/.env.production.template`
 
-`docker-compose.mongodb.yml` starts MongoDB + Mongo Express for experiments:
+## Scripts
 
-```bash
-docker compose -f docker-compose.mongodb.yml up -d
-```
+- `npm run dev` -> run backend + frontend in parallel
+- `npm run start:production` -> run backend in production mode
+- `npm run deploy:export` -> export local SQLite data
+- `npm run deploy:supabase` -> import exported data to Postgres URL
+- `npm run deploy:migrate-images` -> migrate product image paths to Cloudinary
 
-Current backend (`server/server.js`) is SQLite-based and does not use MongoDB yet.
-
-## API Endpoints
+## API
 
 - `GET /api/health`
 - `GET /api/products`
-- `POST /api/products` (multipart form-data, image field name: `image`)
-- `PATCH /api/products/:id` (JSON: `{ "status": "sold" }`)
+- `POST /api/products` (`multipart/form-data`, field: `image`)
+- `PATCH /api/products/:id`
 - `DELETE /api/products/:id`
+
+## Deployment
+
+Use the full deployment runbook:
+- `DEPLOYMENT_GUIDE_NEON_CLOUDINARY.md`

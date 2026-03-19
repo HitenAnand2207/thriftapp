@@ -12,7 +12,8 @@ const path = require('path');
 class DatabaseManager {
   constructor() {
     this.db = null;
-    this.dbType = process.env.NODE_ENV === 'production' ? 'postgresql' : 'sqlite';
+    const cloudConnectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || '').trim();
+    this.dbType = cloudConnectionString ? 'postgresql' : 'sqlite';
     this.isConnected = false;
   }
 
@@ -32,10 +33,10 @@ class DatabaseManager {
   }
 
   async connectPostgreSQL() {
-    const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+    const connectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || '').trim();
     
     if (!connectionString) {
-      throw new Error('SUPABASE_DATABASE_URL or DATABASE_URL environment variable is required');
+      throw new Error('DATABASE_URL or SUPABASE_DATABASE_URL environment variable is required');
     }
 
     this.db = new Pool({

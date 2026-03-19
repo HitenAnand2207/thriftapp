@@ -28,6 +28,25 @@ const MainLayout = () => {
 
   useEffect(() => {
     dispatch(fetchProducts());
+
+    const refreshProducts = () => dispatch(fetchProducts());
+    const intervalId = setInterval(refreshProducts, 30000);
+
+    const handleWindowFocus = () => refreshProducts();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshProducts();
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [dispatch]);
 
   const navItems = [

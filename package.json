@@ -8,6 +8,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
@@ -24,8 +25,9 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.7",
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "cross-env": "^10.1.0",
+    "nodemon": "^3.1.7"
   },
   "scripts": {
     "preserver": "node server/scripts/free-port.js",
@@ -38,8 +40,9 @@
     "deploy:export": "node server/scripts/export-data.js",
     "deploy:import": "node server/scripts/import-data.js",
     "deploy:supabase": "node server/scripts/import-to-supabase.js",
+    "deploy:migrate-images": "node server/scripts/migrate-images-to-cloudinary.js",
     "deploy:setup": "node server/scripts/deploy-setup.js",
-    "start:production": "NODE_ENV=production node server/server.js",
+    "start:production": "cross-env NODE_ENV=production node server/server.js",
     "vercel-build": "npm run build"
   },
   "eslintConfig": {

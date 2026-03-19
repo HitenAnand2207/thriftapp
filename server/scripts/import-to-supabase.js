@@ -6,6 +6,8 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config();
 
 // Import the production database manager
 const dbManager = require('../db/prod-database');
@@ -14,6 +16,12 @@ async function importToSupabase() {
   console.log('🚀 Starting Supabase data import...');
   
   try {
+    const dbConnectionString = (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || '').trim();
+    if (!dbConnectionString) {
+      console.error('❌ DATABASE_URL or SUPABASE_DATABASE_URL is required for Supabase import');
+      process.exit(1);
+    }
+
     // Check if export file exists
     const exportPath = path.join(__dirname, '..', 'export', 'database-export.json');
     const exportExists = await fs.access(exportPath).then(() => true).catch(() => false);

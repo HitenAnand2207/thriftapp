@@ -61,6 +61,15 @@ const SellerRegistration = () => {
     password: "",
   });
 
+  const fieldShellClass =
+    "flex items-center gap-2 border border-slate-300 rounded-xl px-3 py-2 bg-white focus-within:border-cyan-500 focus-within:ring-2 focus-within:ring-cyan-200/70 transition";
+  const fieldInputClass =
+    "w-full bg-transparent outline-none text-sm text-slate-900 placeholder:text-slate-500 caret-slate-900";
+  const standaloneInputClass =
+    "w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200/70";
+  const selectInputClass =
+    "w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200/70";
+
   const handleKycChange = (e) => {
     setKyc({ ...kyc, [e.target.name]: e.target.value });
   };
@@ -182,7 +191,7 @@ const SellerRegistration = () => {
   };
 
   return (
-    <div className="min-h-screen p-4 flex items-center justify-center">
+    <div className="seller-auth-screen min-h-screen p-4 flex items-center justify-center">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white shadow-xl rounded-3xl p-6 space-y-6">
           <div className="flex items-center gap-3">
@@ -214,7 +223,7 @@ const SellerRegistration = () => {
             <form className="space-y-4" onSubmit={handleSendOtp}>
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Aadhaar Number</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <IdCard className="w-5 h-5 text-gray-400" />
                   <input
                     type="text"
@@ -224,7 +233,7 @@ const SellerRegistration = () => {
                     placeholder="12 digit Aadhaar"
                     value={kyc.aadhaar}
                     onChange={handleKycChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
@@ -238,13 +247,13 @@ const SellerRegistration = () => {
                   placeholder="ABCDE1234F"
                   value={kyc.pan}
                   onChange={handleKycChange}
-                  className="w-full bg-gray-50 border rounded-xl px-3 py-2 outline-none text-sm"
+                  className={standaloneInputClass}
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Phone (OTP will be sent)</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <Phone className="w-5 h-5 text-gray-400" />
                   <input
                     type="tel"
@@ -254,7 +263,7 @@ const SellerRegistration = () => {
                     placeholder="10 digit number"
                     value={kyc.phone}
                     onChange={handleKycChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
@@ -281,7 +290,7 @@ const SellerRegistration = () => {
                   type="text"
                   value={enteredOtp}
                   onChange={(e) => setEnteredOtp(e.target.value)}
-                  className="w-full bg-gray-50 border rounded-xl px-3 py-2 outline-none text-sm tracking-widest text-center font-mono"
+                  className={`${standaloneInputClass} tracking-widest text-center font-mono`}
                   placeholder="••••••"
                 />
               </div>
@@ -310,7 +319,7 @@ const SellerRegistration = () => {
             <form className="space-y-4" onSubmit={handleFinish}>
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Store Name (used for seller login)</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <User className="w-5 h-5 text-gray-400" />
                   <input
                     type="text"
@@ -319,14 +328,14 @@ const SellerRegistration = () => {
                     placeholder="Your thrift store name"
                     value={details.storeName}
                     onChange={handleDetailsChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Seller Email</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <Mail className="w-5 h-5 text-gray-400" />
                   <input
                     type="email"
@@ -335,14 +344,14 @@ const SellerRegistration = () => {
                     placeholder="store@email.com"
                     value={details.email}
                     onChange={handleDetailsChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Pickup Address</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <MapPin className="w-5 h-5 text-gray-400" />
                   <input
                     type="text"
@@ -351,7 +360,7 @@ const SellerRegistration = () => {
                     placeholder="Full pickup address"
                     value={details.address}
                     onChange={handleDetailsChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
@@ -363,7 +372,7 @@ const SellerRegistration = () => {
                     name="shippingMethod"
                     value={details.shippingMethod}
                     onChange={handleDetailsChange}
-                    className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                    className={selectInputClass}
                   >
                     {Object.values(SHIPPING_METHODS).map((m) => (
                       <option key={m}>{m}</option>
@@ -377,7 +386,7 @@ const SellerRegistration = () => {
                     name="deliveryOption"
                     value={details.deliveryOption}
                     onChange={handleDetailsChange}
-                    className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                    className={selectInputClass}
                   >
                     <option value={DELIVERY_OPTIONS.FREE}>I will offer free delivery</option>
                     <option value={DELIVERY_OPTIONS.PAID}>Buyer pays delivery</option>
@@ -387,7 +396,7 @@ const SellerRegistration = () => {
 
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Bank account holder</label>
-                <div className="flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                <div className={fieldShellClass}>
                   <Banknote className="w-5 h-5 text-gray-400" />
                   <input
                     type="text"
@@ -396,7 +405,7 @@ const SellerRegistration = () => {
                     placeholder="Name on bank account"
                     value={details.accountHolder}
                     onChange={handleDetailsChange}
-                    className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                    className={fieldInputClass}
                   />
                 </div>
               </div>
@@ -411,7 +420,7 @@ const SellerRegistration = () => {
                     placeholder="XXXXXXXXXXXX"
                     value={details.accountNumber}
                     onChange={handleDetailsChange}
-                    className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                    className={standaloneInputClass}
                   />
                 </div>
                 <div className="flex-1 space-y-1">
@@ -423,7 +432,7 @@ const SellerRegistration = () => {
                     placeholder="SBIN000000"
                     value={details.ifsc}
                     onChange={handleDetailsChange}
-                    className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                    className={standaloneInputClass}
                   />
                 </div>
               </div>
@@ -431,7 +440,7 @@ const SellerRegistration = () => {
               <div className="space-y-1">
                 <label className="text-sm text-gray-600">Seller Password</label>
                 <div className="flex gap-2">
-                  <div className="flex-1 flex items-center gap-2 border rounded-xl px-3 py-2 bg-gray-50">
+                  <div className={`${fieldShellClass} flex-1`}>
                     <KeyRound className="w-5 h-5 text-gray-400" />
                     <input
                       type="text"
@@ -441,7 +450,7 @@ const SellerRegistration = () => {
                       placeholder="Set a strong password"
                       value={details.sellerPassword}
                       onChange={handleDetailsChange}
-                      className="w-full bg-transparent outline-none text-gray-800 text-sm"
+                      className={fieldInputClass}
                     />
                   </div>
                   <button
@@ -507,7 +516,7 @@ const SellerRegistration = () => {
                 value={sellerLogin.storeName}
                 onChange={handleSellerLoginInput}
                 placeholder="Your thrift store name"
-                className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                className={standaloneInputClass}
               />
             </div>
 
@@ -520,7 +529,7 @@ const SellerRegistration = () => {
                 value={sellerLogin.password}
                 onChange={handleSellerLoginInput}
                 placeholder="Seller password"
-                className="w-full bg-gray-50 border rounded-xl px-3 py-2 text-sm outline-none"
+                className={standaloneInputClass}
               />
             </div>
 
