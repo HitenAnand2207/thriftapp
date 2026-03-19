@@ -30,7 +30,7 @@ const SellerDashboard = () => {
 
   // Filter products by seller
   const sellerProducts = useMemo(() => {
-    return products.filter((p) => p.sellerEmail === sellerUser?.email);
+    return products.filter((p) => (p.sellerEmail || p.selleremail) === sellerUser?.email);
   }, [products, sellerUser]);
 
   // Calculate analytics
@@ -432,6 +432,7 @@ const SellerDashboard = () => {
                 <img
                   src={
                     p.imageUrl ||
+                    p.imageurl ||
                     "https://images.pexels.com/photos/6159954/pexels-photo-6159954.jpeg?auto=compress&cs=tinysrgb&w=800"
                   }
                   alt={p.name}

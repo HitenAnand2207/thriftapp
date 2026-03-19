@@ -402,9 +402,23 @@ const uploadImageToCloudinary = (file) =>
     stream.end(file.buffer);
   });
 
-const mapProductRow = (row) => ({
-  ...row,
+const mapProductRow = (row = {}) => ({
+  id: row.id,
+  name: row.name || "",
+  category: row.category || "",
   price: Number(row.price || 0),
+  size: row.size || "",
+  condition: row.condition || "Good",
+  description: row.description || "",
+  imageUrl: row.imageUrl || row.imageurl || "",
+  imagePath: row.imagePath || row.imagepath || "",
+  sellerEmail: row.sellerEmail || row.selleremail || "",
+  sellerId: row.sellerId || row.sellerid || null,
+  listedAt: row.listedAt || row.listedat || null,
+  soldAt: row.soldAt || row.soldat || null,
+  status: row.status || "available",
+  views: Number(row.views || 0),
+  likes: Number(row.likes || 0),
 });
 
 const hashPassword = (plain) => {
@@ -1505,20 +1519,22 @@ app.delete("/api/products/:id", async (req, res) => {
     if (!existing) {
       return res.status(404).json({ message: "Product not found" });
     }
+    const mappedExisting = mapProductRow(existing);
 
     await runSql("DELETE FROM products WHERE id = ?", [id]);
 
     const isCloudinaryAsset =
-      typeof existing.imageUrl === "string" && existing.imageUrl.includes("res.cloudinary.com");
+      typeof mappedExisting.imageUrl === "string" &&
+      mappedExisting.imageUrl.includes("res.cloudinary.com");
 
-    if (USE_CLOUDINARY_STORAGE && isCloudinaryAsset && existing.imagePath) {
+    if (USE_CLOUDINARY_STORAGE && isCloudinaryAsset && mappedExisting.imagePath) {
       try {
-        await cloudinary.uploader.destroy(existing.imagePath, { resource_type: "image" });
+        await cloudinary.uploader.destroy(mappedExisting.imagePath, { resource_type: "image" });
       } catch (destroyError) {
         console.warn("⚠️ Failed to remove Cloudinary image:", destroyError.message);
       }
-    } else if (existing.imagePath && fs.existsSync(existing.imagePath)) {
-      fs.unlinkSync(existing.imagePath);
+    } else if (mappedExisting.imagePath && fs.existsSync(mappedExisting.imagePath)) {
+      fs.unlinkSync(mappedExisting.imagePath);
     }
 
     res.status(204).send();
