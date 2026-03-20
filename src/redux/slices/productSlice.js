@@ -11,6 +11,33 @@ const initialState = {
   error: "",
 };
 
+const filterAvailableProducts = (products = []) =>
+  products.filter((p) => p.status === "available");
+
+const applyProductFilters = (
+  products = [],
+  selectedCategory = "All Categories",
+  searchQuery = ""
+) => {
+  let filtered = filterAvailableProducts(products);
+
+  if (selectedCategory && selectedCategory !== "All Categories") {
+    filtered = filtered.filter((p) => p.category === selectedCategory);
+  }
+
+  const query = String(searchQuery || "").trim().toLowerCase();
+  if (!query) {
+    return filtered;
+  }
+
+  return filtered.filter(
+    (p) =>
+      p.name?.toLowerCase().includes(query) ||
+      p.description?.toLowerCase().includes(query) ||
+      p.category?.toLowerCase().includes(query)
+  );
+};
+
 const withFriendlyNetworkError = (error, fallbackMessage) => {
   const rawMessage = error?.message || "";
 
@@ -131,28 +158,27 @@ const productSlice = createSlice({
   reducers: {
     filterByCategory: (state, action) => {
       state.selectedCategory = action.payload;
-      if (action.payload === "All Categories") {
-        state.filteredProducts = state.products.filter((p) => p.status === "available");
-      } else {
-        state.filteredProducts = state.products.filter(
-          (p) => p.category === action.payload && p.status === "available"
-        );
-      }
+      state.filteredProducts = applyProductFilters(
+        state.products,
+        state.selectedCategory,
+        state.searchQuery
+      );
     },
     searchProducts: (state, action) => {
       state.searchQuery = action.payload;
-      const query = action.payload.toLowerCase();
-      state.filteredProducts = state.products.filter(
-        (p) =>
-          p.status === "available" &&
-          (p.name?.toLowerCase().includes(query) ||
-            p.description?.toLowerCase().includes(query) ||
-            p.category?.toLowerCase().includes(query))
+      state.filteredProducts = applyProductFilters(
+        state.products,
+        state.selectedCategory,
+        state.searchQuery
       );
     },
     loadAllProducts: (state) => {
       state.searchQuery = "";
-      state.filteredProducts = state.products.filter((p) => p.status === "available");
+      state.filteredProducts = applyProductFilters(
+        state.products,
+        state.selectedCategory,
+        state.searchQuery
+      );
     },
   },
   extraReducers: (builder) => {
@@ -164,7 +190,11 @@ const productSlice = createSlice({
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
         state.products = action.payload;
-        state.filteredProducts = action.payload.filter((p) => p.status === "available");
+        state.filteredProducts = applyProductFilters(
+          state.products,
+          state.selectedCategory,
+          state.searchQuery
+        );
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
@@ -177,7 +207,11 @@ const productSlice = createSlice({
       .addCase(addProduct.fulfilled, (state, action) => {
         state.creating = false;
         state.products.unshift(action.payload);
-        state.filteredProducts = state.products.filter((p) => p.status === "available");
+        state.filteredProducts = applyProductFilters(
+          state.products,
+          state.selectedCategory,
+          state.searchQuery
+        );
       })
       .addCase(addProduct.rejected, (state, action) => {
         state.creating = false;
@@ -185,7 +219,11 @@ const productSlice = createSlice({
       })
       .addCase(deleteProduct.fulfilled, (state, action) => {
         state.products = state.products.filter((p) => p.id !== action.payload);
-        state.filteredProducts = state.filteredProducts.filter((p) => p.id !== action.payload);
+        state.filteredProducts = applyProductFilters(
+          state.products,
+          state.selectedCategory,
+          state.searchQuery
+        );
       })
       .addCase(deleteProduct.rejected, (state, action) => {
         state.error = action.payload || "Failed to delete product";
@@ -193,7 +231,11 @@ const productSlice = createSlice({
       .addCase(markAsSold.fulfilled, (state, action) => {
         const index = state.products.findIndex((p) => p.id === action.payload.id);
         if (index !== -1) state.products[index] = action.payload;
-        state.filteredProducts = state.products.filter((p) => p.status === "available");
+        state.filteredProducts = applyProductFilters(
+          state.products,
+          state.selectedCategory,
+          state.searchQuery
+        );
       })
       .addCase(markAsSold.rejected, (state, action) => {
         state.error = action.payload || "Failed to mark product as sold";
