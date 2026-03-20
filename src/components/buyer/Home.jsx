@@ -1,9 +1,10 @@
 import React from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useTheme } from "../../context/ThemeContext";
 import { motion } from "framer-motion";
 import { Sparkles, Shirt, TrendingUp, Filter } from "lucide-react";
 import ProductCard from "./ProductCard";
+import { fetchProducts } from "../../redux/slices/productSlice";
 
 const brandReels = [
   { brand: "Nike", src: "/media/concept_nike_promo_remix.mp4" },
@@ -20,15 +21,25 @@ const reducedReels = brandReels.slice(0, 4);
 const repeatedBrandReels = [...reducedReels, ...reducedReels];
 
 const Home = () => {
+  const dispatch = useDispatch();
   const { isDarkMode } = useTheme();
 
   const showStats = true;
 
-  const { products, filteredProducts, selectedCategory } = useSelector(
+  const {
+    products,
+    filteredProducts,
+    selectedCategory,
+    searchQuery,
+    loading,
+    error,
+  } = useSelector(
     (state) => state.products
   );
 
-  const list = filteredProducts.length ? filteredProducts : products;
+  const hasActiveFilters =
+    selectedCategory !== "All Categories" || Boolean(searchQuery?.trim());
+  const list = hasActiveFilters ? filteredProducts : products;
   const availableProducts = list.filter((p) => p.status === "available");
 
   // Calculate stats
@@ -147,8 +158,45 @@ const Home = () => {
         </div>
       </div>
 
+      {error && (
+        <div
+          className={`rounded-2xl border p-4 flex items-center justify-between gap-3 ${
+            isDarkMode
+              ? "bg-red-900/20 border-red-800/50 text-red-100"
+              : "bg-red-50 border-red-200 text-red-900"
+          }`}
+        >
+          <div>
+            <p className="text-sm font-semibold">Unable to load latest products</p>
+            <p className="text-xs opacity-90 mt-1">{error}</p>
+          </div>
+          <button
+            onClick={() => dispatch(fetchProducts())}
+            className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${
+              isDarkMode
+                ? "bg-red-700 hover:bg-red-600 text-white"
+                : "bg-red-600 hover:bg-red-700 text-white"
+            }`}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading && products.length === 0 && !error && (
+        <div
+          className={`mt-10 flex items-center justify-center text-sm py-8 rounded-2xl border ${
+            isDarkMode
+              ? "bg-slate-900/30 border-slate-700 text-slate-300"
+              : "bg-white/70 border-slate-200 text-slate-600"
+          }`}
+        >
+          Loading products...
+        </div>
+      )}
+
       {/* Empty State */}
-      {availableProducts.length === 0 ? (
+      {!loading && availableProducts.length === 0 ? (
         <div
           className={`mt-10 flex flex-col items-center justify-center text-center gap-4 py-16 rounded-3xl border-2 border-dashed ${
             isDarkMode

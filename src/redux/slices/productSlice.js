@@ -12,17 +12,60 @@ const initialState = {
 };
 
 const withFriendlyNetworkError = (error, fallbackMessage) => {
-  if (error?.name === "TypeError") {
-    return "Cannot reach server. Start backend with `npm run server` and check CORS/API URL.";
+  const rawMessage = error?.message || "";
+
+  if (
+    error?.name === "TypeError" ||
+    /failed to fetch|networkerror|load failed/i.test(rawMessage)
+  ) {
+    return "Cannot reach backend. Check API URL, CORS settings, and backend service status.";
   }
-  return error?.message || fallbackMessage;
+
+  if (/non-json response/i.test(rawMessage)) {
+    return "Received non-JSON response from API. Verify REACT_APP_API_BASE_URL points to your backend.";
+  }
+
+  if (/cors blocked/i.test(rawMessage)) {
+    return "Request blocked by CORS. Add your frontend domain to backend CORS_ORIGIN.";
+  }
+
+  return rawMessage || fallbackMessage;
 };
 
 export const fetchProducts = createAsyncThunk("products/fetchProducts", async (_, thunkApi) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/products`);
-    if (!response.ok) throw new Error("Failed to fetch products");
-    return await response.json();
+
+    if (!response.ok) {
+      let message = `Failed to fetch products (HTTP ${response.status})`;
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
+
+      if (contentType.includes("application/json")) {
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.message) {
+          message = payload.message;
+        }
+      } else {
+        const text = await response.text().catch(() => "");
+        if (text) {
+          message = text.slice(0, 200);
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      throw new Error(`Non-JSON response from API (${contentType || "unknown content-type"})`);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      throw new Error("Invalid products payload from server");
+    }
+
+    return data;
   } catch (error) {
     return thunkApi.rejectWithValue(withFriendlyNetworkError(error, "Failed to fetch products"));
   }
@@ -108,6 +151,7 @@ const productSlice = createSlice({
       );
     },
     loadAllProducts: (state) => {
+      state.searchQuery = "";
       state.filteredProducts = state.products.filter((p) => p.status === "available");
     },
   },
