@@ -19,6 +19,14 @@ const brandReels = [
 
 const reducedReels = brandReels.slice(0, 4);
 const repeatedBrandReels = [...reducedReels, ...reducedReels];
+const demoProducts = [
+  { id: "demo-1", name: "Vintage Denim Jacket", category: "Outerwear", price: 1199, size: "M", status: "available" },
+  { id: "demo-2", name: "Pastel Hoodie", category: "Hoodies", price: 899, size: "L", status: "available" },
+  { id: "demo-3", name: "Relaxed Cargo Pants", category: "Bottomwear", price: 999, size: "32", status: "available" },
+  { id: "demo-4", name: "Graphic Tee", category: "T-Shirts", price: 499, size: "M", status: "available" },
+  { id: "demo-5", name: "Corduroy Shirt", category: "Shirts", price: 749, size: "L", status: "available" },
+  { id: "demo-6", name: "Pleated Skirt", category: "Skirts", price: 699, size: "S", status: "available" },
+];
 
 const Home = () => {
   const dispatch = useDispatch();
@@ -41,6 +49,10 @@ const Home = () => {
     selectedCategory !== "All Categories" || Boolean(searchQuery?.trim());
   const list = hasActiveFilters ? filteredProducts : products;
   const availableProducts = list.filter((p) => p.status === "available");
+  const showDemoProducts =
+    !loading && !error && availableProducts.length === 0 && !hasActiveFilters;
+  const visibleProducts = showDemoProducts ? demoProducts : availableProducts;
+  const availabilityCount = visibleProducts.length;
 
   // Calculate stats
   const totalProducts = products.filter((p) => p.status === "available").length;
@@ -138,8 +150,8 @@ const Home = () => {
           >
             <Shirt className="w-4 h-4" />
             <span>
-              {availableProducts.length}{" "}
-              {availableProducts.length === 1 ? "item" : "items"} available
+              {availabilityCount}{" "}
+              {availabilityCount === 1 ? "item" : "items"} available
             </span>
           </div>
         </div>
@@ -195,8 +207,20 @@ const Home = () => {
         </div>
       )}
 
+      {showDemoProducts && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            isDarkMode
+              ? "bg-amber-900/20 border-amber-800/40 text-amber-100"
+              : "bg-amber-50 border-amber-200 text-amber-900"
+          }`}
+        >
+          No live listings yet, so you are seeing demo products.
+        </div>
+      )}
+
       {/* Empty State */}
-      {!loading && availableProducts.length === 0 ? (
+      {!loading && visibleProducts.length === 0 ? (
         <div
           className={`mt-10 flex flex-col items-center justify-center text-center gap-4 py-16 rounded-3xl border-2 border-dashed ${
             isDarkMode
@@ -235,7 +259,7 @@ const Home = () => {
       ) : (
         /* Product Grid */
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-5">
-          {availableProducts.map((product) => (
+          {visibleProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
