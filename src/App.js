@@ -1,6 +1,7 @@
 // src/App.js
 import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { API_BASE_URL } from "./utils/api";
 
 const Login = lazy(() => import("./components/auth/Login"));
 const Signup = lazy(() => import("./components/auth/Signup"));
@@ -103,6 +104,11 @@ const RouteMetadata = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    // Warm backend early so the first products request is less likely to hit a cold start.
+    fetch(`${API_BASE_URL}/api/health`, { method: "GET" }).catch(() => {});
+  }, []);
+
   return (
     <>
       <RouteMetadata />

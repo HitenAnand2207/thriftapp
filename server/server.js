@@ -1148,18 +1148,6 @@ app.post("/api/backup/restore", async (req, res) => {
   }
 });
 
-// ============= PRODUCT MANAGEMENT =============
-
-app.get("/api/products", async (_req, res) => {
-  try {
-    const rows = await allSql("SELECT * FROM products WHERE status = 'available' ORDER BY listedAt DESC");
-    res.json(rows.map(mapProductRow));
-  } catch (error) {
-    console.error("❌ Products fetch error:", error);
-    res.status(500).json({ message: "Failed to fetch products" });
-  }
-});
-
 // ============= STORAGE MONITORING & ANALYTICS =============
 
 // Get storage statistics

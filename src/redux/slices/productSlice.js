@@ -1,8 +1,18 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { API_BASE_URL } from "../../utils/api";
+import { getFromLocalStorage, saveToLocalStorage } from "../../utils/localStorage";
+
+const PRODUCTS_CACHE_KEY = "cachedProducts";
+
+const getCachedProducts = () => {
+  const cached = getFromLocalStorage(PRODUCTS_CACHE_KEY, []);
+  return Array.isArray(cached) ? cached : [];
+};
+
+const cachedProducts = getCachedProducts();
 
 const initialState = {
-  products: [],
+  products: cachedProducts,
   filteredProducts: [],
   selectedCategory: "All Categories",
   searchQuery: "",
@@ -190,6 +200,7 @@ const productSlice = createSlice({
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
         state.products = action.payload;
+        saveToLocalStorage(PRODUCTS_CACHE_KEY, action.payload);
         state.filteredProducts = applyProductFilters(
           state.products,
           state.selectedCategory,
